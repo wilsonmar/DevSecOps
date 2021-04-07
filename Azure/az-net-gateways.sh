@@ -58,7 +58,8 @@ az network vnet-gateway create \
     --sku VpnGw1 \
     --no-wait
 
-#Gateway creation takes approximately 30+ minutes to complete. To monitor the progress of the #gateway creation, run the following command. We're using the Linux watch command to run the az network vnet-gateway list command periodically, which enables you to .
+echo "Gateway creation takes approximately 30+ minutes to complete."
+# To monitor the progress of the #gateway creation, run the following command. 
 
 echo "STEP 07 - monitor the progress:"
 # watch -d -n 5 \ 
