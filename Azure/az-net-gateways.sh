@@ -61,9 +61,12 @@ az network vnet-gateway create \
 #Gateway creation takes approximately 30+ minutes to complete. To monitor the progress of the #gateway creation, run the following command. We're using the Linux watch command to run the az network vnet-gateway list command periodically, which enables you to .
 
 echo "STEP 07 - monitor the progress:"
-watch -d -n 5 az network vnet-gateway list \
+# watch -d -n 5 \ 
+az network vnet-gateway list \
     --resource-group learn-1c07ea0e-dc95-4522-9ae3-0ee8da9786f0 \
     --output table
+
+exit
 
 # After each VPN gateway shows a ProvisioningState of Succeeded, you're ready to continue. Press Ctrl+C to halt the command after the gateway is created.
 
