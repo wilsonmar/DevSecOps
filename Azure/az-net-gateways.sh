@@ -7,6 +7,9 @@
 
 # From https://docs.microsoft.com/en-us/learn/modules/connect-on-premises-network-with-vpn-gateway/4-exercise-create-a-site-to-site-vpn-gateway-using-azure-cli-commands
 
+#echo "STEP 00 - Login Azure:"
+#az login
+
 echo "STEP 01 - Create the PIP-VNG-Azure-VNet-1 public IP address:"
 az network public-ip create \
     --resource-group learn-1c07ea0e-dc95-4522-9ae3-0ee8da9786f0 \
