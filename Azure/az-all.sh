@@ -8,7 +8,7 @@
 # Implements Lab https://github.com/MicrosoftLearning/AZ-303-Microsoft-Azure-Architect-Technologies/blob/master/Instructions/Labs/Module_05_Lab.md
 
 # No need for az login within Cloud Shell.
-echo "STEP 00 - Login Azure:"
+# echo "STEP 00 - Login Azure:"
 
 # QUESTION: Why is this necessary?
 # az provider show -n Microsoft.Insights
