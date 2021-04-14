@@ -19,7 +19,7 @@ LOCATION='westus'
    # az account list-locations --query "[].{name:name}" -o table
 MY_RG="NetworkWatcherRG"  # per lab   
    
-echo "*** Add network watcher"
+echo "*** Add network watcher for LOCATION=$LOCATION"
 az network watcher configure --resource-group $MY_RG --locations $LOCATION --enabled -o table
 
 exit
