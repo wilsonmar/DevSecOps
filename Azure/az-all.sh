@@ -15,9 +15,15 @@ echo "STEP 00 - Login Azure:"
    # In Json response: 
    # az provider register --namespace 'Microsoft.Insights'
 
-LOCATION='uswest2'
+LOCATION='westus'
    # az account list-locations --query "[].{name:name}" -o table
 MY_RG="NetworkWatcherRG"  # per lab   
    
 echo "*** Add network watcher"
 az network watcher configure --resource-group $MY_RG --locations $LOCATION --enabled -o table
+
+exit
+az deployment sub create \
+--location $LOCATION \
+--template-file azuredeploy30305suba.json \
+--parameters rgName=az30305a-labRG rgLocation=$LOCATION
