@@ -14,11 +14,16 @@
 # az provider show -n Microsoft.Insights
    # In Json response: 
    # az provider register --namespace 'Microsoft.Insights'
+# prevents: Resource provider 'Microsoft.Network' used by this operation is not registered. We are registering for you.
 
 LOCATION='westus'
    # az account list-locations --query "[].{name:name}" -o table
 MY_RG="NetworkWatcherRG"  # per lab   
-   
+
+echo "*** Create ResourceGroup MY_RG=$MY_RG"
+az group create --name $MY_RG --location $LOCATION
+   # az group list  # https://docs.microsoft.com/en-us/azure/azure-resource-manager/management/manage-resource-groups-cli
+
 echo "*** Add network watcher for LOCATION=$LOCATION"
 az network watcher configure --resource-group $MY_RG --locations $LOCATION --enabled -o table
 
