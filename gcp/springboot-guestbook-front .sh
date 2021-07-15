@@ -6,11 +6,11 @@
 # 
 # Lab invoked from https://www.coursera.org/learn/google-cloud-java-spring/gradedLti/AGGm2/bootstrapping-the-application-frontend-and-backend
 # Highlight this command, copy it and paste it in the Google Cloud Shell within Qwiklabs:
-# sh -c "$(curl -fsSL https://raw.githubusercontent.com/wilsonmar/DevSecOps/master/gcp/springboot-JAVAMS01.sh)"
+# sh -c "$(curl -fsSL https://raw.githubusercontent.com/wilsonmar/DevSecOps/master/gcp/springboot-guestbook-front.sh)"
 
 uname -a
 
-if [ -z ${MY_REGION+x} ]; then
+if [ -z "${MY_REGION+x}" ]; then
    MY_REGION="us-central1"
 fi
 echo ">>> MY_REGION=$MY_REGION"
