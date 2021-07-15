@@ -17,9 +17,13 @@ if [ -z "${MY_REGION+x}" ]; then
 fi
 echo ">>> MY_REGION=$MY_REGION"
 
-echo ">>> Run the frontend"
 cd ~/
-git clone https://github.com/saturnism/spring-cloud-gcp-guestbook.git
+if [ -d "~/spring-cloud-gcp-guestbook" ]; then
+   echo ">>> Using repo already cloned..."
+else
+   echo ">>> Cloning the repo..."
+   git clone https://github.com/saturnism/spring-cloud-gcp-guestbook.git --depth 1
+fi
 
 echo ">>> Make a copy of the initial version of the frontend app (guestbook-service)"
 cp -a ~/spring-cloud-gcp-guestbook/1-bootstrap/guestbook-frontend \
