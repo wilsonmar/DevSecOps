@@ -32,5 +32,4 @@ cp -a ~/spring-cloud-gcp-guestbook/1-bootstrap/guestbook-frontend \
 echo ">>> Run the frontend app"
 cd ~/guestbook-frontend
 ./mvnw -q spring-boot:run
-
-echo ">>> Now open a second Cloud Shell console to the same virtual machine."
+# The above command freezes the Console
