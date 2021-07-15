@@ -39,6 +39,7 @@ gcloud services list | grep sqladmin
 
 echo ">>> List the Cloud SQL instances"
 gcloud sql instances list
+   # "Listed 0 items." means there are none.
 
 echo ">>> Create a new Cloud SQL instance"
 gcloud sql instances create guestbook --region=us-central1
