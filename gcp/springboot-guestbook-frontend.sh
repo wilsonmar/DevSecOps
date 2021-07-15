@@ -11,7 +11,7 @@
 # Host info: uname -a
 
 if [ -z "${MY_REGION+x}" ]; then
-   MY_REGION="us-central1"
+   MY_REGION="us-central1-c"
    gcloud config set compute/zone "$MY_REGION"
    gcloud config list
 fi
