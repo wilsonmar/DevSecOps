@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 
 # ./jq-skills.sh
-# Inspect a big unknown blob of JSON.
-# The following command grabs a JSON blob that represents the open issues in the public Docker GitHub repository, and store it in a shell variable named foo:
-
+# http://www.compciv.org/recipes/cli/jq-for-parsing-json/
 
 # https://cameronnokes.com/blog/jq-cheatsheet/
 # Downloads the latest APOD and saves to a file
@@ -39,7 +37,8 @@ echo '[1, 2, 2, 3]' | jq 'unique'
  
 
 echo ">>> "
-
+# Inspect a big unknown blob of JSON.
+# The following command grabs a JSON blob that represents the open issues in the public Docker GitHub repository, and store it in a shell variable named foo:
 if [[ -z "${foo}" ]]; then  # variable found:
    echo "Reusing \$foo"
 else
