@@ -1,20 +1,21 @@
 #!/bin/bash -e
 
-# bash -c "$(curl -fsSL https://raw.githubusercontent.com/wilsonmar/DevSecOps/main/GCP/gks-cluster.sh)" -v -i
+# bash -c "$(curl -fsSL https://raw.githubusercontent.com/wilsonmar/DevSecOps/main/gcp/gks-cluster.sh)"
 
 # https://google.qwiklabs.com/focuses/8586?parent=catalog
 # Kubernetes Engine: Qwik Start
 
-echo ">>> Task 1: Set a default compute zone"
-gcloud config set compute/zone us-central1-a
+MY_ZONE="us-central1-a"
+echo ">>> Task 1: Set a default compute zone: $MY_ZONE"
+gcloud config set compute/zone "$MY_ZONE"
    # Updated property [compute/zone].
 
-CLUSTER-NAME="mycluster1"  # hard-coded here!
-echo ">>> Task 2: Create a GKE cluster: $CLUSTER-NAME"
-gcloud container clusters create "$CLUSTER-NAME"
+CLUSTER_NAME="mycluster1"  # hard-coded here!
+echo ">>> Task 2: Create a GKE cluster: $CLUSTER_NAME"
+gcloud container clusters create "$CLUSTER_NAME"
 
 echo ">>> Task 3: Get authentication credentials for the cluster"
-gcloud container clusters get-credentials "$CLUSTER-NAME"
+gcloud container clusters get-credentials "$CLUSTER_NAME"
    # Fetching cluster endpoint and auth data.
    # kubeconfig entry generated for my-cluster.
 
@@ -39,7 +40,7 @@ kubectl get service
 # http://[EXTERNAL-IP]:8080
 
 echo ">>> Task 5: Deleting the cluster"
-gcloud container clusters delete "$CLUSTER-NAME"
+gcloud container clusters delete "$CLUSTER_NAME"
 # When prompted, type Y to confirm.
 
 # Congratulations!
