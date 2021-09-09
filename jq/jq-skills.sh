@@ -35,7 +35,10 @@ echo '{"nested": {"a": {"b": 42}}}' | jq '.nested.a.b'
 echo ">>> Gets an array of unique values: [1, 2, 3]"
 echo '[1, 2, 2, 3]' | jq 'unique'
  
+echo ">>> ‘has’ filter exits with a boolean “true” or “false”. 
+# They’re both ideal for nesting inside a ‘select()’ like so:
 
+echo ${foo} | jq '.[] | select (.| has("pull_request"))'
 echo ">>> "
 # Inspect a big unknown blob of JSON.
 # The following command grabs a JSON blob that represents the open issues in the public Docker GitHub repository, and store it in a shell variable named foo:
