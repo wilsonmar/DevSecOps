@@ -19,7 +19,10 @@ echo ">>> Setup credentials from AVM to AWS_PROFILE=$AWS_PROFILE :"
 echo ">>> aws whoami: Calling UserId, Account, Arn?"
 # https://docs.aws.amazon.com/cli/latest/reference/sts/get-caller-identity.html
 aws sts get-caller-identity
-if [ $# -ne 2 ]; then exit -1 fi
+retVal=$?
+if [ $retVal -ne 0 ]; then
+   exit -1 
+fi
 
 
 # echo ">>> When was AWS user account created?"
