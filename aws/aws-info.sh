@@ -6,8 +6,10 @@
 
 # After you obtain a Terminal (console) in your enviornment,
 # cd to folder, copy this line and paste in the terminal:
-# bash -c "$(curl -fsSL https://raw.githubusercontent.com/wilsonmar/DevSecOps/master/aws/aws-info.sh)" -v -i
+# bash -c "$(curl -fsSL https://raw.githubusercontent.com/wilsonmar/DevSecOps/master/aws/aws-info.sh)"
 
+
+OS_TYPE="macOS"
 
 # https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html
 export AWS_PROFILE="cdb-aws-09"
@@ -17,6 +19,8 @@ echo ">>> Setup credentials from AVM to AWS_PROFILE=$AWS_PROFILE :"
 echo ">>> aws whoami: Calling UserId, Account, Arn?"
 # https://docs.aws.amazon.com/cli/latest/reference/sts/get-caller-identity.html
 aws sts get-caller-identity
+if [ $# -ne 2 ]; then exit -1 fi
+
 
 # echo ">>> When was AWS user account created?"
 # https://docs.aws.amazon.com/cli/latest/reference/iam/get-user.html
@@ -136,18 +140,19 @@ export INSTANCE_IP=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --ou
 
 echo ">>> Which Services are being used?"
 # While it *can* be answered in the Config console UI (given enough clicks), or using Cost Explorer (fewer clicks), 
-if mac:
-# For MacOS: https://stackoverflow.com/questions/63559669/get-first-date-of-current-month-in-macos-terminal
-# And https://www.freebsd.org/cgi/man.cgi?date
-   MONTH_FIRST_DAY=$( date -v1d -v"$(date '+%m')"m '+%Y-%m-%d' )  # yields 2021-09-01
+if [ "$OS_TYPE" == "macOS" ]; then  # it's on a Mac:
+   # For MacOS: https://stackoverflow.com/questions/63559669/get-first-date-of-current-month-in-macos-terminal
+   # And https://www.freebsd.org/cgi/man.cgi?date
+   MONTH_FIRST_DAY=$( date -v1d -v"$(date '+%m')"m '+%Y-%m-%d' )  # yields 09-01
       # The -v1d is a time adjust flag to move to the first day of the month
       # In -v"$(date '+%m')"m, we get the current month number using date '+%m' and use it to populate the month adjust field. So e.g. for Aug 2020, its set to -v8m
       # The '+%F' prints the date in YYYY-MM-DD format. If not supported in your date version, use +%Y-%m-%d explicitly.
       # To print all 12 months: for mon in {1..12}; do; date -v1d -v"$mon"m '+%F'; done
    # ERROR: MONTH_LAST_DAY=$( date -v2d -v-1d '+%Y-%m-%d' )  # for 2021-09-30
 else
+   # Linux?
    MONTH_FIRST_DAY=$(date "+%Y-%m-01" -d "-1 Month")
-endif
+fi
    # This requires GNU date and is not portable (notably Mac / *BSD date is different)
    aws ce get-cost-and-usage --time-period Start="$MONTH_FIRST_DAY",End=$(date --date="$(date +'%Y-%m-01') - 1 second" -I) \
       --granularity MONTHLY --metrics UsageQuantity \
