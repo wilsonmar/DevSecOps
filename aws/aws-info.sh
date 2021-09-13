@@ -4,13 +4,13 @@ l#!/usr/bin/env bash
 # Based on https://medium.com/circuitpeople/aws-cli-with-jq-and-bash-9d54e2eabaf1
 #          https://theagileadmin.com/2017/05/26/aws-cli-queries-and-jq/
 
-# After you obtain a Terminal (console) in your enviornment,
-# cd to folder, copy this line and paste in the terminal:
+# After you obtain a Terminal (console) in your environment,
+# cd to folder, copy this line (without the # first character) and paste in the Terminal:
 # bash -c "$(curl -fsSL https://raw.githubusercontent.com/wilsonmar/DevSecOps/master/aws/aws-info.sh)"
 
 
 export OS_TYPE="macOS"
-export AWS_PROFILE="cdb-aws-09"
+export AWS_PROFILE="cdb-aws-09"  # Default
 
 # https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html
 echo ">>> Edit ~/.aws/credentials"
