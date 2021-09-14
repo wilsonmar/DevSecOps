@@ -3,6 +3,7 @@
 # aws-info.sh in https://github.com/wilsonmar/DevSecOps/blob/main/aws/aws-info.sh
 # Based on https://medium.com/circuitpeople/aws-cli-with-jq-and-bash-9d54e2eabaf1
 #          https://theagileadmin.com/2017/05/26/aws-cli-queries-and-jq/
+#    TODO: https://github.com/bash-my-aws/bash-my-aws documented at https://bash-my-aws.org/
 
 # After you obtain a Terminal (console) in your environment,
 # cd to folder, copy this line (without the # first character) and paste in the Terminal:
@@ -30,7 +31,7 @@ args_prompt() {
    echo " "
    echo "   -I           -Install brew, docker, docker-compose"
    echo "   -U           -Upgrade packages"
-   echo "   -p           -p \"cdb-aws-09\" "
+   echo "   -p \"cdb-aws-09\" to use [Default] within ~/.aws/credentials"
    echo " "
  }
 if [ $# -eq 0 ]; then  # display if no parameters are provided:
@@ -285,7 +286,7 @@ fi
 
 ##############################################################################
 
-note "============= User "
+h2 "============= User "
 
 # See https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html
 # note "Edit ~/.aws/credentials"
@@ -310,7 +311,7 @@ note "Which region is being used?"
 aws ec2 describe-availability-zones --output text --query 'AvailabilityZones[0].[RegionName]'
 
 
-note "============= AWS Services "
+h2 "============= AWS Services "
 
 note "How many AWS services available?"
 curl -s https://raw.githubusercontent.com/boto/botocore/develop/botocore/data/endpoints.json \
@@ -367,13 +368,13 @@ aws ec2 describe-snapshots --owner-ids self \
    | jq '.Snapshots | [ group_by(.VolumeId)[] | { (.[0].VolumeId): { "count": (.[] | length), "size": ([.[].VolumeSize] | add) } } ] | add'
 
 
-note "============= Networking "
+h2 "============= Networking "
 
 note "What CIDRs have Ingress Access to which Ports?"
 aws ec2 describe-security-groups | jq '[ .SecurityGroups[].IpPermissions[] as $a | { "ports": [($a.FromPort|tostring),($a.ToPort|tostring)]|unique, "cidr": $a.IpRanges[].CidrIp } ] | [group_by(.cidr)[] | { (.[0].cidr): [.[].ports|join("-")]|unique }] | add'
 
 
-note "============= Lambda "
+h2 "============= Lambda "
 
 note "Which Lambda Functions Runtimes am I Using?"
 aws lambda list-functions | jq ".Functions | group_by(.Runtime)|[.[]|{ runtime:.[0].Runtime, functions:[.[]|.FunctionName] }
@@ -387,14 +388,15 @@ note "Lambda Function Environment Variables: exposing secrets in variables? Have
 aws lambda list-functions | jq -r '[.Functions[]|{name: .FunctionName, env: .Environment.Variables}]|.[]|select(.env|length > 0)'
 
 
-note "============= EC2 "
+h2 "============= EC2 "
 
-note "How many instances of each type running/stopped?"
+note "How many EC2 instances of each type running/stopped?"
 aws ec2 describe-instances | jq -r "[[.Reservations[].Instances[]|{ state: .State.Name, type: .InstanceType }]|group_by(.state)|.[]|{state: .[0].state, types: [.[].type]|[group_by(.)|.[]|{type: .[0], count: ([.[]]|length)}] }]"
    # [ { "state": "running", "types": [ { "type": "t3.medium", "count": 1    } ] } ]
 
 note "Which of my EC2 Security Groups are being used?"
-MY_SEC_GROUPS="$( aws ec2 describe-network-interfaces | jq '[.NetworkInterfaces[].Groups[]|.]|map({ (.GroupId|tostring): true }) | add'; aws ec2 describe-security-groups | jq '[.SecurityGroups[].GroupId]|map({ (.|tostring): false })|add'; )"
+MY_SEC_GROUPS="$( aws ec2 describe-network-interfaces \
+      | jq '[.NetworkInterfaces[].Groups[]|.]|map({ (.GroupId|tostring): true }) | add'; aws ec2 describe-security-groups | jq '[.SecurityGroups[].GroupId]|map({ (.|tostring): false })|add'; )"
 # echo "MY_SEC_GROUPS=$MY_SEC_GROUPS"
 echo "$MY_SEC_GROUPS" | jq -s '[.[1], .[0]]|add|to_entries|[group_by(.value)[]|{ (.[0].value|if . then "in-use" else "unused" end): [.[].key] }]|add' 
 
@@ -405,7 +407,29 @@ for stack in $(aws cloudformation list-stacks --stack-status-filter CREATE_COMPL
    | jq -r '.StackResources[] | select (.ResourceType=="AWS::EC2::Instance")|.PhysicalResourceId'; done;
 
 
-note "============= Disk usage "
+# note "Loop through the groups and streams and get the last 10 messages since midnight:"
+# for group in $logs; do for stream in $(aws logs describe-log-streams --log-group-name $group --order-by LastEventTime --descending --max-items 1 | jq -r '[ .logStreams[0].logStreamName + " "] | add'); do h2 ""; echo GROUP: $group; echo STREAM: $stream; aws logs get-log-events --limit 10 --log-group-name $group --log-stream-name $stream --start-time $(date -d 'today 00:00:00' '+%s%N' | cut -b1-13) | jq -r ".events[].message"; done; done
+
+note "How much Data is in Each of my S3 Buckets?"
+   # CloudWatch contains the data, but if your account has more than a few buckets it’s very tedious to use.
+   # This little command gives your the total size of the objects in each bucket, one per line, with human-friendly numbers:
+for bucket in $( aws s3api list-buckets --query "Buckets[].Name" --output text); \
+   do aws cloudwatch get-metric-statistics --namespace AWS/S3 --metric-name BucketSizeBytes --dimensions Name=BucketName,Value=$bucket Name=StorageType,Value=StandardStorage --start-time $(date --iso-8601)T00:00 --end-time $(date --iso-8601)T23:59 --period 86400 --statistic Maximum \
+   | echo $bucket: $(numfmt --to si $(jq -r ".Datapoints[0].Maximum // 0")); done;
+retVal=$?
+if [ $retVal -ne 0 ]; then
+   exit -1 
+fi
+
+note "In dollars per month? (based on the standard tier price of $0.023 per GB per month):"
+for bucket in $(aws s3api list-buckets --query "Buckets[].Name" --output text); do aws cloudwatch get-metric-statistics --namespace AWS/S3 --metric-name BucketSizeBytes --dimensions Name=BucketName,Value=$bucket Name=StorageType,Value=StandardStorage --start-time $(date --iso-8601)T00:00 --end-time $(date --iso-8601)T23:59 --period 86400 --statistic Maximum | echo $bucket: \$$(jq -r "(.Datapoints[0].Maximum //
+ 0) * .023 / (1024*1024*1024) * 100.0 | floor / 100.0"); done;
+retVal=$?
+if [ $retVal -ne 0 ]; then
+   exit -1 
+fi
+
+h2 "============= Disk usage "
 
 note "How many Gigabytes of Volumes do I have, by Status?"
 aws ec2 describe-volumes | jq -r '.Volumes | [ group_by(.State)[] | { (.[0].State): ([.[].Size] | add) } ] | add'
@@ -415,34 +439,16 @@ note "RDS (Relational Data Service) Instance Endpoints:"
 aws rds describe-db-instances | jq -r '.DBInstances[] | { (.DBInstanceIdentifier):(.Endpoint.Address + ":" + (.Endpoint.Port|tostring))}'
 
 
-note "============= Logs "
+h2 "============= Logs "
 
-note "getting the log group names (space delimited):"
+note "Log group names (space delimited):"
 logs=$(aws logs describe-log-groups | jq -r '.logGroups[].logGroupName')
-note "log=$log "
+echo "$logs"
 
 note "first log stream for each:"
 for group in $logs; do echo $(aws logs describe-log-streams --log-group-name $group --order-by LastEventTime --descending --max-items 1 | jq -r '.logStreams[0].logStreamName + " "'); done
 
 exit -1
-
-
-# note "Loop through the groups and streams and get the last 10 messages since midnight:"
-# for group in $logs; do for stream in $(aws logs describe-log-streams --log-group-name $group --order-by LastEventTime --descending --max-items 1 | jq -r '[ .logStreams[0].logStreamName + " "] | add'); do h2 ""; echo GROUP: $group; echo STREAM: $stream; aws logs get-log-events --limit 10 --log-group-name $group --log-stream-name $stream --start-time $(date -d 'today 00:00:00' '+%s%N' | cut -b1-13) | jq -r ".events[].message"; done; done
-
-
-note "How much Data is in Each of my S3 Buckets?"
-   # CloudWatch contains the data, but if your account has more than a few buckets it’s very tedious to use.
-   # This little command gives your the total size of the objects in each bucket, one per line, with human-friendly numbers:
-for bucket in $( aws s3api list-buckets --query "Buckets[].Name" --output text); \
-   do aws cloudwatch get-metric-statistics --namespace AWS/S3 --metric-name BucketSizeBytes --dimensions Name=BucketName,Value=$bucket Name=StorageType,Value=StandardStorage --start-time $(date --iso-8601)T00:00 --end-time $(date --iso-8601)T23:59 --period 86400 --statistic Maximum \
-   | echo $bucket: $(numfmt --to si $(jq -r ".Datapoints[0].Maximum // 0")); done;
-
-note "In dollars per month? (based on the standard tier price of $0.023 per GB per month):"
-for bucket in $(aws s3api list-buckets --query "Buckets[].Name" --output text); do aws cloudwatch get-metric-statistics --namespace AWS/S3 --metric-name BucketSizeBytes --dimensions Name=BucketName,Value=$bucket Name=StorageType,Value=StandardStorage --start-time $(date --iso-8601)T00:00 --end-time $(date --iso-8601)T23:59 --period 86400 --statistic Maximum | echo $bucket: \$$(jq -r "(.Datapoints[0].Maximum //
- 0) * .023 / (1024*1024*1024) * 100.0 | floor / 100.0"); done;
-
-
 
 
 ------------------
@@ -472,7 +478,6 @@ export INSTANCE_ID=$(jq -r .Instances[].InstanceId instance.json)
 note "Step 5: Wait for the instance to spin-up, then grab it’s IP address and hold onto it in an environment variable:"
 export INSTANCE_IP=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --output text --query 'Reservations[*].Instances[*].PublicIpAddress')
 
-------------------------
 
 
 # cat vpc.dat | jq  '.[0]'
