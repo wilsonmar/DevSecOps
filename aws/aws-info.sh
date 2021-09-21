@@ -307,6 +307,7 @@ fi
 
 ##############################################################################
 
+
 h2 "============= User "
 
 # See https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html
@@ -349,9 +350,23 @@ note "How many AWS services available?"
 curl -s https://raw.githubusercontent.com/boto/botocore/develop/botocore/data/endpoints.json \
    | jq -r '.partitions[0].services | keys[]' | wc -l
 
+
 # While it *can* be answered in the Config console UI (given enough clicks), 
 # or using Cost Explorer (fewer clicks), 
-note "Calculating OS_TYPE=$OS_TYPE "
+local_cost_report() {
+   # See https://docs.aws.amazon.com/cli/latest/reference/ce/get-cost-and-usage.html
+#   aws ce get-cost-and-usage --time-period Start="$MONTH_FIRST_DAY",End="$MONTH_LAST_DAY" \
+#      --granularity MONTHLY --metrics UsageQuantity \
+#      --group-by Type=DIMENSION,Key=SERVICE | jq '.ResultsByTime[].Groups[] | select(.Metrics.UsageQuantity.Amount > 0) | .Keys[0]'
+      # date "+%Y-%m-01" yields 2021-09-01, see https://www.cyberciti.biz/faq/linux-unix-formatting-dates-for-display/
+      # See https://stackoverflow.com/questions/27920201/how-can-i-get-the-1st-and-last-date-of-the-previous-month-in-a-bash-script/46897063
+   note "Cost of each service for $MONTH_RANGE month $MONTH_FIRST_DAY to $MONTH_LAST_DAY ($OS_TYPE)"
+   aws ce get-cost-and-usage --time-period Start="$MONTH_FIRST_DAY",End="$MONTH_LAST_DAY" \
+      --granularity MONTHLY --metrics USAGE_QUANTITY BLENDED_COST  \
+      --group-by Type=DIMENSION,Key=SERVICE | jq '[ .ResultsByTime[].Groups[] | select(.Metrics.BlendedCost.Amount > "0") | { (.Keys[0]): .Metrics.BlendedCost } ] | sort_by(.Amount) | add'
+}
+
+   MONTH_RANGE="previous"
 if [ "$OS_TYPE" == "macOS" ]; then  # it's on a Mac:
    # For MacOS: https://stackoverflow.com/questions/63559669/get-first-date-of-current-month-in-macos-terminal
    # And https://www.freebsd.org/cgi/man.cgi?date
@@ -363,24 +378,38 @@ if [ "$OS_TYPE" == "macOS" ]; then  # it's on a Mac:
       # To print all 12 months: for mon in {1..12}; do; date -v1d -v"$mon"m '+%F'; done
    # MONTH_LAST_DAY=$( date -v1d -v-1d -v+1m +%Y-%m-%d )  # for 2021-09-30
    MONTH_LAST_DAY=$( date -v1d -v-1d -v+0m +%Y-%m-%d )  # for 2021-09-30
-
 else
    # This uses GNU date on Linus: not portable (notably Mac / *BSD date is different)
    # https://unix.stackexchange.com/questions/223543/get-the-date-of-last-months-last-day-in-a-shell-script
    MONTH_FIRST_DAY=$( date "+%Y-%m-01" -d "-1 Month" )
    MONTH_LAST_DAY=$( date --date="$(date +'%Y-%m-01') - 1 second" -I )  # for 2021-09-30
 fi
-   # See https://docs.aws.amazon.com/cli/latest/reference/ce/get-cost-and-usage.html
-#   aws ce get-cost-and-usage --time-period Start="$MONTH_FIRST_DAY",End="$MONTH_LAST_DAY" \
-#      --granularity MONTHLY --metrics UsageQuantity \
-#      --group-by Type=DIMENSION,Key=SERVICE | jq '.ResultsByTime[].Groups[] | select(.Metrics.UsageQuantity.Amount > 0) | .Keys[0]'
-      # date "+%Y-%m-01" yields 2021-09-01, see https://www.cyberciti.biz/faq/linux-unix-formatting-dates-for-display/
-      # See https://stackoverflow.com/questions/27920201/how-can-i-get-the-1st-and-last-date-of-the-previous-month-in-a-bash-script/46897063
+local_cost_report
 
-   note "Cost of each service for previous month $MONTH_FIRST_DAY to $MONTH_LAST_DAY "
-   aws ce get-cost-and-usage --time-period Start="$MONTH_FIRST_DAY",End="$MONTH_LAST_DAY" \
-      --granularity MONTHLY --metrics USAGE_QUANTITY BLENDED_COST  \
-      --group-by Type=DIMENSION,Key=SERVICE | jq '[ .ResultsByTime[].Groups[] | select(.Metrics.BlendedCost.Amount > "0") | { (.Keys[0]): .Metrics.BlendedCost } ] | sort_by(.Amount) | add'
+
+   MONTH_RANGE="current"
+if [ "$OS_TYPE" == "macOS" ]; then  # it's on a Mac:
+   # For MacOS: https://stackoverflow.com/questions/63559669/get-first-date-of-current-month-in-macos-terminal
+   # And https://www.freebsd.org/cgi/man.cgi?date
+   MONTH_FIRST_DAY=$( date -v1d '+%Y-%m-%d' )  # yields 2021-08-01 previous month start
+   # MONTH_FIRST_DAY=$( date -v1d -v"$(date '+%m')"m '+%Y-%m-%d' )  # yields 2021-09-01
+      # The -v1d is a time adjust flag to move to the first day of the month
+      # In -v"$(date '+%m')"m, we get the current month number using date '+%m' and use it to populate the month adjust field. So e.g. for Aug 2020, its set to -v8m
+      # The '+%F' prints the date in YYYY-MM-DD format. If not supported in your date version, use +%Y-%m-%d explicitly.
+      # To print all 12 months: for mon in {1..12}; do; date -v1d -v"$mon"m '+%F'; done
+   # MONTH_LAST_DAY=$( date -v1d -v-1d -v+1m +%Y-%m-%d )  # for 2021-09-30
+   MONTH_LAST_DAY=$( date -v1d -v-1d -v+1m +%Y-%m-%d )  # for 2021-09-30
+else
+   # This uses GNU date on Linus: not portable (notably Mac / *BSD date is different)
+   # https://unix.stackexchange.com/questions/223543/get-the-date-of-last-months-last-day-in-a-shell-script
+   MONTH_FIRST_DAY=$( date "+%Y-%m-01" )
+   MONTH_LAST_DAY=$( date --date="$(date +'%Y-%m-01') - 1 second" -I )  # for 2021-09-30
+fi
+local_cost_report
+
+exit
+
+
 
 note "How many Snapshot volumes do I have?"
 aws ec2 describe-snapshots --owner-ids self | jq '.Snapshots | length'
@@ -463,6 +492,13 @@ aws ec2 describe-volumes | jq -r '.Volumes | [ group_by(.State)[] | { (.[0].Stat
 
 note "RDS (Relational Data Service) Instance Endpoints:"
 aws rds describe-db-instances | jq -r '.DBInstances[] | { (.DBInstanceIdentifier):(.Endpoint.Address + ":" + (.Endpoint.Port|tostring))}'
+
+
+h2 "============= Certificates "
+
+# https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_server-certs.html
+note "aws iam list-server-certificates"
+aws iam list-server-certificates
 
 
 h2 "============= Logs "
