@@ -31,7 +31,7 @@ args_prompt() {
    echo " "
    echo "   -I           -Install brew, docker, docker-compose"
    echo "   -U           -Upgrade packages"
-   echo "   -p \"cdb-aws-09\" to use [Default] within ~/.aws/credentials"
+   echo "   -p \"xxx-aws-##\" to use [Default] within ~/.aws/credentials"
    echo " "
  }
 if [ $# -eq 0 ]; then  # display if no parameters are provided:
@@ -51,7 +51,7 @@ exit_abnormal() {            # Function: Exit with error.
    RUN_VERBOSE=false            # -v
    UPDATE_PKGS=false            # -U
    DOWNLOAD_INSTALL=false       # -I
-   AWS_PROFILE="Default"        # -p
+   AWS_PROFILE="default"        # -p
 
 # SETUP STEP 04 - Read parameters specified:
 while test $# -gt 0; do
@@ -134,6 +134,13 @@ warning() {  # &#9758; or &#9755;
 fatal() {   # Skull: &#9760;  # Star: &starf; &#9733; U+02606  # Toxic: &#9762;
    printf "\n${red}☢  %s${reset}\n" "$(echo "$@" | sed '/./,$!d')"
 }
+divider() {
+  printf "\r\033[0;1m========================================================================\033[0m\n"
+}
+
+pause_for_confirmation() {
+  read -rsp $'Press any key to continue (ctrl-c to quit):\n' -n1 key
+}
 
 # SETUP STEP 06 - Check what operating system is in use:
    OS_TYPE="$( uname )"
@@ -215,7 +222,21 @@ BASH_VERSION=$( bash --version | grep bash | cut -d' ' -f4 | head -c 1 )
       fi
    fi
 
-# SETUP STEP 09 - Display run ending:"
+# SETUP STEP 09 - Handle run endings:"
+
+# In case of interrupt control+C confirm to exit gracefully:
+interrupt_count=0
+interrupt_handler() {
+  ((interrupt_count += 1))
+  echo ""
+  if [[ $interrupt_count -eq 1 ]]; then
+    fail "Really quit? Hit ctrl-c again to confirm."
+  else
+    echo "Goodbye!"
+    exit
+  fi
+}
+trap interrupt_handler SIGINT SIGTERM
 trap this_ending EXIT
 trap this_ending INT QUIT TERM
 this_ending() {
@@ -300,15 +321,26 @@ if [ $retVal -ne 0 ]; then
    exit -1 
 fi
 
-# note "When was AWS user account created?"
-# See https://docs.aws.amazon.com/cli/latest/reference/iam/get-user.html
-# ERROR: aws iam get-user --user-name "$AWS_PROFILE" --cli-input-json "json" | jq -r ".User.CreateDate[:4]" 
+# See https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html
+note "aws configure list-profiles"
+aws configure list-profiles
+
+note "aws config list:"
+aws configure list
 
 note "What AWS account is being used?"
 { aws sts get-caller-identity & aws iam list-account-aliases; } | jq -s ".|add"
 
+# note "When was AWS user account created?"
+# See https://docs.aws.amazon.com/cli/latest/reference/iam/get-user.html
+# ERROR: aws iam get-user --user-name "$AWS_PROFILE" --cli-input-json "json" | jq -r ".User.CreateDate[:4]" 
+
 note "Which region is being used?"
 aws ec2 describe-availability-zones --output text --query 'AvailabilityZones[0].[RegionName]'
+
+note "Trusted Advisor"
+CHECK_ID=$(aws --region us-east-1 support describe-trusted-advisor-checks --language en --query 'checks[?name==`Service Limits`].{id:id}[0].id' --output text)
+echo $CHECK_ID
 
 
 h2 "============= AWS Services "
@@ -319,6 +351,7 @@ curl -s https://raw.githubusercontent.com/boto/botocore/develop/botocore/data/en
 
 # While it *can* be answered in the Config console UI (given enough clicks), 
 # or using Cost Explorer (fewer clicks), 
+note "Calculating OS_TYPE=$OS_TYPE "
 if [ "$OS_TYPE" == "macOS" ]; then  # it's on a Mac:
    # For MacOS: https://stackoverflow.com/questions/63559669/get-first-date-of-current-month-in-macos-terminal
    # And https://www.freebsd.org/cgi/man.cgi?date
@@ -337,7 +370,6 @@ else
    MONTH_FIRST_DAY=$( date "+%Y-%m-01" -d "-1 Month" )
    MONTH_LAST_DAY=$( date --date="$(date +'%Y-%m-01') - 1 second" -I )  # for 2021-09-30
 fi
-   note "From $OS_TYPE - $MONTH_FIRST_DAY to $MONTH_LAST_DAY "
    # See https://docs.aws.amazon.com/cli/latest/reference/ce/get-cost-and-usage.html
 #   aws ce get-cost-and-usage --time-period Start="$MONTH_FIRST_DAY",End="$MONTH_LAST_DAY" \
 #      --granularity MONTHLY --metrics UsageQuantity \
@@ -345,16 +377,10 @@ fi
       # date "+%Y-%m-01" yields 2021-09-01, see https://www.cyberciti.biz/faq/linux-unix-formatting-dates-for-display/
       # See https://stackoverflow.com/questions/27920201/how-can-i-get-the-1st-and-last-date-of-the-previous-month-in-a-bash-script/46897063
 
-   note "What is each service costing me for the previous month:"
+   note "Cost of each service for previous month $MONTH_FIRST_DAY to $MONTH_LAST_DAY "
    aws ce get-cost-and-usage --time-period Start="$MONTH_FIRST_DAY",End="$MONTH_LAST_DAY" \
       --granularity MONTHLY --metrics USAGE_QUANTITY BLENDED_COST  \
       --group-by Type=DIMENSION,Key=SERVICE | jq '[ .ResultsByTime[].Groups[] | select(.Metrics.BlendedCost.Amount > "0") | { (.Keys[0]): .Metrics.BlendedCost } ] | sort_by(.Amount) | add'
-
-   note "What is each service costing me for the current month:"
-   aws ce get-cost-and-usage --time-period Start="$MONTH_FIRST_DAY",End="$MONTH_LAST_DAY" \
-      --granularity MONTHLY --metrics USAGE_QUANTITY BLENDED_COST  \
-      --group-by Type=DIMENSION,Key=SERVICE | jq '[ .ResultsByTime[].Groups[] | select(.Metrics.BlendedCost.Amount > "0") | { (.Keys[0]): .Metrics.BlendedCost } ] | sort_by(.Amount) | add'
-
 
 note "How many Snapshot volumes do I have?"
 aws ec2 describe-snapshots --owner-ids self | jq '.Snapshots | length'

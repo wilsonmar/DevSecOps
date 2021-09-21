@@ -1,0 +1,9 @@
+### macOS ###
+# General
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Terraform
+.terraform
+terraform.tfstate*
