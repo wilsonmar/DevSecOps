@@ -225,17 +225,18 @@ BASH_VERSION=$( bash --version | grep bash | cut -d' ' -f4 | head -c 1 )
 # SETUP STEP 09 - Handle run endings:"
 
 # In case of interrupt control+C confirm to exit gracefully:
-interrupt_count=0
-interrupt_handler() {
-  ((interrupt_count += 1))
-  echo ""
-  if [[ $interrupt_count -eq 1 ]]; then
-    fail "Really quit? Hit ctrl-c again to confirm."
-  else
-    echo "Goodbye!"
-    exit
-  fi
-}
+#interrupt_count=0
+#interrupt_handler() {
+#  ((interrupt_count += 1))
+#  echo ""
+#  if [[ $interrupt_count -eq 1 ]]; then
+#    fail "Really quit? Hit ctrl-c again to confirm."
+#  else
+#    echo "Goodbye!"
+#    exit
+#  fi
+#}
+
 trap interrupt_handler SIGINT SIGTERM
 trap this_ending EXIT
 trap this_ending INT QUIT TERM
@@ -344,7 +345,7 @@ CHECK_ID=$(aws --region us-east-1 support describe-trusted-advisor-checks --lang
 echo $CHECK_ID
 
 
-h2 "============= AWS Services "
+h2 "============= AWS Services Costs "
 
 note "How many AWS services available?"
 curl -s https://raw.githubusercontent.com/boto/botocore/develop/botocore/data/endpoints.json \
@@ -407,26 +408,15 @@ else
 fi
 local_cost_report
 
-exit
-
-
-
-note "How many Snapshot volumes do I have?"
-aws ec2 describe-snapshots --owner-ids self | jq '.Snapshots | length'
-   # 4
-
-note "how large are EC2 Snapshots in total?"
-aws ec2 describe-snapshots --owner-ids self | jq '[.Snapshots[].VolumeSize] | add'
-
-note "How do Snapshots breakdown by the volume used to create them?"
-aws ec2 describe-snapshots --owner-ids self \
-   | jq '.Snapshots | [ group_by(.VolumeId)[] | { (.[0].VolumeId): { "count": (.[] | length), "size": ([.[].VolumeSize] | add) } } ] | add'
-
 
 h2 "============= Networking "
 
 note "What CIDRs have Ingress Access to which Ports?"
 aws ec2 describe-security-groups | jq '[ .SecurityGroups[].IpPermissions[] as $a | { "ports": [($a.FromPort|tostring),($a.ToPort|tostring)]|unique, "cidr": $a.IpRanges[].CidrIp } ] | [group_by(.cidr)[] | { (.[0].cidr): [.[].ports|join("-")]|unique }] | add'
+
+
+note "RDS (Relational Data Service) Instance Endpoints:"
+aws rds describe-db-instances | jq -r '.DBInstances[] | { (.DBInstanceIdentifier):(.Endpoint.Address + ":" + (.Endpoint.Port|tostring))}'
 
 
 h2 "============= Lambda "
@@ -435,8 +425,8 @@ note "Which Lambda Functions Runtimes am I Using?"
 aws lambda list-functions | jq ".Functions | group_by(.Runtime)|[.[]|{ runtime:.[0].Runtime, functions:[.[]|.FunctionName] }
 ]"
 
-note "Is everyone taking the time to set memory size and the time out appropriately?"
-aws lambda list-functions | jq ".Functions | group_by(.Runtime)|[.[]|{ (.[0].Runtime): [.[]|{ name: .FunctionName, timeout: .Timeout, memory: .MemorySize }] }]"
+# note "Is everyone taking the time to set memory size and the time out appropriately?"
+# aws lambda list-functions | jq ".Functions | group_by(.Runtime)|[.[]|{ (.[0].Runtime): [.[]|{ name: .FunctionName, timeout: .Timeout, memory: .MemorySize }] }]"
    # [{ "python3.6": [ { "name": "aws-controltower-NotificationForwarder", "timeout": 60, "memory": 128 }]
 
 note "Lambda Function Environment Variables: exposing secrets in variables? Have a typo in a key?"
@@ -465,33 +455,46 @@ for stack in $(aws cloudformation list-stacks --stack-status-filter CREATE_COMPL
 # note "Loop through the groups and streams and get the last 10 messages since midnight:"
 # for group in $logs; do for stream in $(aws logs describe-log-streams --log-group-name $group --order-by LastEventTime --descending --max-items 1 | jq -r '[ .logStreams[0].logStreamName + " "] | add'); do h2 ""; echo GROUP: $group; echo STREAM: $stream; aws logs get-log-events --limit 10 --log-group-name $group --log-stream-name $stream --start-time $(date -d 'today 00:00:00' '+%s%N' | cut -b1-13) | jq -r ".events[].message"; done; done
 
-note "How much Data is in Each of my S3 Buckets?"
+
+S3_BUCKET_COUNT=$( aws s3api list-buckets --query "Buckets[].Name" | wc -l )
+note "How much Data is in Each of my $S3_BUCKET_COUNT S3 Buckets?"
    # CloudWatch contains the data, but if your account has more than a few buckets it’s very tedious to use.
    # This little command gives your the total size of the objects in each bucket, one per line, with human-friendly numbers:
-for bucket in $( aws s3api list-buckets --query "Buckets[].Name" --output text); \
-   do aws cloudwatch get-metric-statistics --namespace AWS/S3 --metric-name BucketSizeBytes --dimensions Name=BucketName,Value=$bucket Name=StorageType,Value=StandardStorage --start-time $(date --iso-8601)T00:00 --end-time $(date --iso-8601)T23:59 --period 86400 --statistic Maximum \
+   # date +%Y-%m-%d = date --iso-8601 = 2021-12-30
+for bucket in $( aws s3api list-buckets --query "Buckets[].Name" --output text ); \
+   do aws cloudwatch get-metric-statistics --namespace AWS/S3 --metric-name BucketSizeBytes \
+      --dimensions Name=BucketName,Value=$bucket Name=StorageType,Value=StandardStorage \
+      --start-time $(date +%Y-%m-%d)T00:00 --end-time $(date +%Y-%m-%d)T23:59 --period 86400 --statistic Maximum \
    | echo $bucket: $(numfmt --to si $(jq -r ".Datapoints[0].Maximum // 0")); done;
 retVal=$?
 if [ $retVal -ne 0 ]; then
    exit -1 
 fi
 
-note "In dollars per month? (based on the standard tier price of $0.023 per GB per month):"
-for bucket in $(aws s3api list-buckets --query "Buckets[].Name" --output text); do aws cloudwatch get-metric-statistics --namespace AWS/S3 --metric-name BucketSizeBytes --dimensions Name=BucketName,Value=$bucket Name=StorageType,Value=StandardStorage --start-time $(date --iso-8601)T00:00 --end-time $(date --iso-8601)T23:59 --period 86400 --statistic Maximum | echo $bucket: \$$(jq -r "(.Datapoints[0].Maximum //
- 0) * .023 / (1024*1024*1024) * 100.0 | floor / 100.0"); done;
-retVal=$?
-if [ $retVal -ne 0 ]; then
-   exit -1 
-fi
+
+#note "Bucket cost dollars per month (based on the standard tier price of $0.023 per GB per month):"
+#   | echo $bucket: $(jq -r "(.Datapoints[0].Maximum // 0) * .023 / (1024*1024*1024) * 100.0 | floor / 100.0"); done;
+
+
+h2 "============= EC2 "
+
+note "How many Snapshot volumes do I have?"
+aws ec2 describe-snapshots --owner-ids self | jq '.Snapshots | length'
+   # 4
+
+note "how large are EC2 Snapshots in total?"
+aws ec2 describe-snapshots --owner-ids self | jq '[.Snapshots[].VolumeSize] | add'
+
+note "How do Snapshots breakdown by the volume used to create them?"
+aws ec2 describe-snapshots --owner-ids self \
+   | jq '.Snapshots | [ group_by(.VolumeId)[] | { (.[0].VolumeId): { "count": (.[] | length), "size": ([.[].VolumeSize] | add) } } ] | add'
+
+
 
 h2 "============= Disk usage "
 
 note "How many Gigabytes of Volumes do I have, by Status?"
 aws ec2 describe-volumes | jq -r '.Volumes | [ group_by(.State)[] | { (.[0].State): ([.[].Size] | add) } ] | add'
-
-
-note "RDS (Relational Data Service) Instance Endpoints:"
-aws rds describe-db-instances | jq -r '.DBInstances[] | { (.DBInstanceIdentifier):(.Endpoint.Address + ":" + (.Endpoint.Port|tostring))}'
 
 
 h2 "============= Certificates "
@@ -507,38 +510,47 @@ note "Log group names (space delimited):"
 logs=$(aws logs describe-log-groups | jq -r '.logGroups[].logGroupName')
 echo "$logs"
 
+
 note "first log stream for each:"
-for group in $logs; do echo $(aws logs describe-log-streams --log-group-name $group --order-by LastEventTime --descending --max-items 1 | jq -r '.logStreams[0].logStreamName + " "'); done
+for group in $logs; do echo $(aws logs describe-log-streams --log-group-name $group \
+   --order-by LastEventTime --descending --max-items 1 | jq -r '.logStreams[0].logStreamName + " "'); done
 
-exit -1
 
-
-------------------
 
 # https://okigiveup.net/tutorials/discovering-aws-with-cli-part-1-basics/
 # https://github.com/afroisalreadyinu/aws-containers
-note "Create VPC based on CIDR"  # see https://docs.amazonaws.cn/en_us/vpc/latest/userguide/vpc-subnets-commands-example.html
+# note "Create VPC based on CIDR"  # see https://docs.amazonaws.cn/en_us/vpc/latest/userguide/vpc-subnets-commands-example.html
 # aws ec2 create-vpc --cidr-block 10.0.0.0/16 --query Vpc.VpcId --output text
+   # An error occurred (VpcLimitExceeded) when calling the CreateVpc operation: The maximum number of VPCs has been reached.
 
-note "Step 1: Creating EC2 Instances to find (this is slow, ’cause there are a *lot* of AMIs) and hold it in an environment variable:"
-export AMI_ID=$(aws ec2 describe-images --owners amazon | jq -r ".Images[] | { id: .ImageId, desc: .Description } | select(.desc?) | select(.desc | contains(\"Amazon Linux 2\")) | select(.desc | contains(\".NET Core 2.1\")) | .id")
 
-note "AMI_ID=$AMI_ID Step 2: Create a key pair, to file keypair.pem :"
-aws ec2 create-key-pair --key-name aurora-test-keypair > keypair.pem
+MY_AMI_TYPE="Amazon Linux 2"
+MY_AMI_CONTAINS=".NET Core 2.1"
+h2 "============= \"$MY_AMI_TYPE\" AMIs containing \"$MY_AMI_CONTAINS\" "
 
-note "TODO: Identify subnet id:"
+note "List AMIs in an environment variable (this is slow, ’cause there are a *lot* of AMIs):"
+#note "Step 1: List AMIs in an environment variable (this is slow, ’cause there are a *lot* of AMIs):"
+export AMI_IDS=$(aws ec2 describe-images --owners amazon | jq -r ".Images[] | { id: .ImageId, desc: .Description } \
+  | select(.desc?) | select(.desc | contains(\"$MY_AMI_TYPE\")) | select(.desc | contains(\"$MY_AMI_CONTAINS\")) | .id")
+echo "AMI_ID=$AMI_IDS "
+
+#note "Step 2: Create a key pair, to file keypair.pem :"
+#aws ec2 create-key-pair --key-name aurora-test-keypair > keypair.pem
+
+
+# note "TODO: Identify subnet id:"
 # https://docs.aws.amazon.com/cli/latest/reference/ec2/describe-subnets.html
 # https://wiki.outscale.net/display/EN/Getting+Information+About+Your+Subnets
 # TODO: <your_subnet_id>
 
-note "Step 3: Create the instance using the AMI and the key pair, and hold onto the result in a file:"
-aws ec2 run-instances --instance-type t2.micro --image-id $AMI_ID --region us-east-1 --subnet-id <your_subnet_id> --key-name keypair --count 1 > instance.json
+#note "Step 3: Create the instance using the AMI and the key pair, and hold onto the result in a file:"
+# aws ec2 run-instances --instance-type t2.micro --image-id $AMI_IDS --region us-east-1 --subnet-id <your_subnet_id> --key-name keypair --count 1 > instance.json
 
-note "Step 4: Grab the instance Id from the file:"
-export INSTANCE_ID=$(jq -r .Instances[].InstanceId instance.json)
+#note "Step 4: Grab the instance Id from the file:"
+#export INSTANCE_ID=$(jq -r .Instances[].InstanceId instance.json)
 
-note "Step 5: Wait for the instance to spin-up, then grab it’s IP address and hold onto it in an environment variable:"
-export INSTANCE_IP=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --output text --query 'Reservations[*].Instances[*].PublicIpAddress')
+#note "Step 5: Wait for the instance to spin-up, then grab it’s IP address and hold onto it in an environment variable:"
+# export INSTANCE_IP=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --output text --query 'Reservations[*].Instances[*].PublicIpAddress')
 
 
 
