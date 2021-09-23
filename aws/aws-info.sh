@@ -20,8 +20,6 @@ echo "=========================== $LOG_DATETIME $THIS_PROGRAM $SCRIPT_VERSION"
 
 # SETUP STEP 02 - Ensure run variables are based on arguments or defaults ..."
 args_prompt() {
-   echo "USAGE EXAMPLE:"
-   echo "./sample.sh -u \"Default\" "
    echo "OPTIONS:"
    echo "   -E           to set -e to NOT stop on error"
    echo "   -x           to set -x to trace command lines"
@@ -33,6 +31,17 @@ args_prompt() {
    echo "   -U           -Upgrade packages"
    echo "   -p \"xxx-aws-##\" to use [Default] within ~/.aws/credentials"
    echo " "
+   echo "   -all         to show all sections of info."
+   echo "   -netinfo     to show Network info."
+   echo "   -lambdainfo  to show Lambda info."
+   echo "   -amiinfo     to show AMI info."
+   echo "   -ec2info     to show EC2 info."
+   echo "   -diskinfo    to show Disk info."
+   echo "   -certinfo    to show Certificates info."
+   echo "   -loginfo     to show Logging info."
+   echo " "
+   echo "USAGE EXAMPLE:"
+   echo "./sample.sh -u \"Default\" -all "
  }
 if [ $# -eq 0 ]; then  # display if no parameters are provided:
    args_prompt
@@ -53,9 +62,43 @@ exit_abnormal() {            # Function: Exit with error.
    DOWNLOAD_INSTALL=false       # -I
    AWS_PROFILE="default"        # -p
 
+   ALL_INFO=false               # -all
+   USER_INFO=false              # -userinfo
+   NET_INFO=false               # -netinfo
+   LAMBDA_INFO=false            # -lambdainfo
+   AMI_INFO=false               # -amiinfo
+   EC2_INFO=false               # -ec2info
+   S3_INFO=false                # -s3info
+   DISK_INFO=false              # -diskinfo
+   CERT_INFO=false              # -diskinfo
+   LOG_INFO=false               # -loginfo
+
+   MY_AMI_TYPE="Amazon Linux 2"
+   MY_AMI_CONTAINS=".NET Core 2.1"
+
 # SETUP STEP 04 - Read parameters specified:
 while test $# -gt 0; do
   case "$1" in
+    -all)
+      export ALL_INFO=true
+      shift
+      ;;
+    -amiinfo)
+      export AMI_INFO=true
+      shift
+      ;;
+    -certinfo)
+      export CERT_INFO=true
+      shift
+      ;;
+    -diskinfo)
+      export DISK_INFO=true
+      shift
+      ;;
+    -ec2info)
+      export EC2_INFO=true
+      shift
+      ;;
     -E)
       export SET_EXIT=false
       shift
@@ -68,8 +111,28 @@ while test $# -gt 0; do
       export DOWNLOAD_INSTALL=true
       shift
       ;;
-    -x)
-      export SET_TRACE=true
+    -lambdainfo)
+      export LAMBDA_INFO=true
+      shift
+      ;;
+    -loginfo)
+      export LOG_INFO=true
+      shift
+      ;;
+    -netinfo)
+      export NET_INFO=true
+      shift
+      ;;
+    -s3info)
+      export S3_INFO=true
+      shift
+      ;;
+    -svcinfo)
+      export SVC_INFO=true
+      shift
+      ;;
+    -userinfo)
+      export USER_INFO=true
       shift
       ;;
     -U)
@@ -84,6 +147,10 @@ while test $# -gt 0; do
       shift
              AWS_PROFILE=$( echo "$1" | sed -e 's/^[^=]*=//g' )
       export AWS_PROFILE
+      shift
+      ;;
+    -x)
+      export SET_TRACE=true
       shift
       ;;
     *)
@@ -308,7 +375,7 @@ fi
 
 ##############################################################################
 
-
+if [ "${USER_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -userinfo
 h2 "============= User "
 
 # See https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html
@@ -344,7 +411,10 @@ note "Trusted Advisor"
 CHECK_ID=$(aws --region us-east-1 support describe-trusted-advisor-checks --language en --query 'checks[?name==`Service Limits`].{id:id}[0].id' --output text)
 echo $CHECK_ID
 
+fi   # if [ USER_INFO=true
 
+
+if [ "${SVC_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -svcinfo
 h2 "============= AWS Services Costs "
 
 note "How many AWS services available?"
@@ -408,8 +478,11 @@ else
 fi
 local_cost_report
 
+fi # 
 
-h2 "============= Networking "
+if [ "${NET_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -netinfo
+
+h2 "============= Networks "
 
 note "What CIDRs have Ingress Access to which Ports?"
 aws ec2 describe-security-groups | jq '[ .SecurityGroups[].IpPermissions[] as $a | { "ports": [($a.FromPort|tostring),($a.ToPort|tostring)]|unique, "cidr": $a.IpRanges[].CidrIp } ] | [group_by(.cidr)[] | { (.[0].cidr): [.[].ports|join("-")]|unique }] | add'
@@ -418,7 +491,10 @@ aws ec2 describe-security-groups | jq '[ .SecurityGroups[].IpPermissions[] as $a
 note "RDS (Relational Data Service) Instance Endpoints:"
 aws rds describe-db-instances | jq -r '.DBInstances[] | { (.DBInstanceIdentifier):(.Endpoint.Address + ":" + (.Endpoint.Port|tostring))}'
 
+fi  #
 
+
+if [ "${LAMBDA_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -lambdainfo
 h2 "============= Lambda "
 
 note "Which Lambda Functions Runtimes am I Using?"
@@ -432,7 +508,10 @@ aws lambda list-functions | jq ".Functions | group_by(.Runtime)|[.[]|{ runtime:.
 note "Lambda Function Environment Variables: exposing secrets in variables? Have a typo in a key?"
 aws lambda list-functions | jq -r '[.Functions[]|{name: .FunctionName, env: .Environment.Variables}]|.[]|select(.env|length > 0)'
 
+fi #
 
+
+if [ "${EC2_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -ec2info
 h2 "============= EC2 "
 
 note "How many EC2 instances of each type running/stopped?"
@@ -455,6 +534,25 @@ for stack in $(aws cloudformation list-stacks --stack-status-filter CREATE_COMPL
 # note "Loop through the groups and streams and get the last 10 messages since midnight:"
 # for group in $logs; do for stream in $(aws logs describe-log-streams --log-group-name $group --order-by LastEventTime --descending --max-items 1 | jq -r '[ .logStreams[0].logStreamName + " "] | add'); do h2 ""; echo GROUP: $group; echo STREAM: $stream; aws logs get-log-events --limit 10 --log-group-name $group --log-stream-name $stream --start-time $(date -d 'today 00:00:00' '+%s%N' | cut -b1-13) | jq -r ".events[].message"; done; done
 
+#note "Bucket cost dollars per month (based on the standard tier price of $0.023 per GB per month):"
+#   | echo $bucket: $(jq -r "(.Datapoints[0].Maximum // 0) * .023 / (1024*1024*1024) * 100.0 | floor / 100.0"); done;
+
+note "How many Snapshot volumes do I have?"
+aws ec2 describe-snapshots --owner-ids self | jq '.Snapshots | length'
+   # 4
+
+note "how large are EC2 Snapshots in total?"
+aws ec2 describe-snapshots --owner-ids self | jq '[.Snapshots[].VolumeSize] | add'
+
+note "How do Snapshots breakdown by the volume used to create them?"
+aws ec2 describe-snapshots --owner-ids self \
+   | jq '.Snapshots | [ group_by(.VolumeId)[] | { (.[0].VolumeId): { "count": (.[] | length), "size": ([.[].VolumeSize] | add) } } ] | add'
+
+
+fi #
+
+if [ "${S3_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -s3info
+h2 "============= S3 usage "
 
 S3_BUCKET_COUNT=$( aws s3api list-buckets --query "Buckets[].Name" | wc -l )
 note "How much Data is in Each of my $S3_BUCKET_COUNT S3 Buckets?"
@@ -471,39 +569,27 @@ if [ $retVal -ne 0 ]; then
    exit -1 
 fi
 
+fi #
 
-#note "Bucket cost dollars per month (based on the standard tier price of $0.023 per GB per month):"
-#   | echo $bucket: $(jq -r "(.Datapoints[0].Maximum // 0) * .023 / (1024*1024*1024) * 100.0 | floor / 100.0"); done;
-
-
-h2 "============= EC2 "
-
-note "How many Snapshot volumes do I have?"
-aws ec2 describe-snapshots --owner-ids self | jq '.Snapshots | length'
-   # 4
-
-note "how large are EC2 Snapshots in total?"
-aws ec2 describe-snapshots --owner-ids self | jq '[.Snapshots[].VolumeSize] | add'
-
-note "How do Snapshots breakdown by the volume used to create them?"
-aws ec2 describe-snapshots --owner-ids self \
-   | jq '.Snapshots | [ group_by(.VolumeId)[] | { (.[0].VolumeId): { "count": (.[] | length), "size": ([.[].VolumeSize] | add) } } ] | add'
-
-
-
+if [ "${DISK_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -diskinfo
 h2 "============= Disk usage "
 
 note "How many Gigabytes of Volumes do I have, by Status?"
 aws ec2 describe-volumes | jq -r '.Volumes | [ group_by(.State)[] | { (.[0].State): ([.[].Size] | add) } ] | add'
 
+fi #
 
+
+if [ "${CERT_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -certinfo
 h2 "============= Certificates "
 
 # https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_server-certs.html
 note "aws iam list-server-certificates"
 aws iam list-server-certificates
 
+fi #
 
+if [ "${LOG_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -loginfo
 h2 "============= Logs "
 
 note "Log group names (space delimited):"
@@ -523,9 +609,10 @@ for group in $logs; do echo $(aws logs describe-log-streams --log-group-name $gr
 # aws ec2 create-vpc --cidr-block 10.0.0.0/16 --query Vpc.VpcId --output text
    # An error occurred (VpcLimitExceeded) when calling the CreateVpc operation: The maximum number of VPCs has been reached.
 
+fi #
 
-MY_AMI_TYPE="Amazon Linux 2"
-MY_AMI_CONTAINS=".NET Core 2.1"
+if [ "${AMI_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -amiinfo
+
 h2 "============= \"$MY_AMI_TYPE\" AMIs containing \"$MY_AMI_CONTAINS\" "
 
 note "List AMIs in an environment variable (this is slow, ’cause there are a *lot* of AMIs):"
@@ -533,6 +620,10 @@ note "List AMIs in an environment variable (this is slow, ’cause there are a *
 export AMI_IDS=$(aws ec2 describe-images --owners amazon | jq -r ".Images[] | { id: .ImageId, desc: .Description } \
   | select(.desc?) | select(.desc | contains(\"$MY_AMI_TYPE\")) | select(.desc | contains(\"$MY_AMI_CONTAINS\")) | .id")
 echo "AMI_ID=$AMI_IDS "
+
+fi #
+
+###########
 
 #note "Step 2: Create a key pair, to file keypair.pem :"
 #aws ec2 create-key-pair --key-name aurora-test-keypair > keypair.pem
