@@ -45,6 +45,7 @@ args_prompt() {
    echo "   -certinfo    to show Certificates info."
    echo "   -loginfo     to show Logging info."
    echo " "
+   echo "   -R \"us-east-1\"  to aws configure set region "
    echo "USAGE EXAMPLE:"
    echo "./sample.sh -v -allinfo "
  }
@@ -66,6 +67,7 @@ exit_abnormal() {            # Function: Exit with error.
    UPDATE_PKGS=false            # -U
    DOWNLOAD_INSTALL=false       # -I
    AWS_PROFILE="default"        # -p
+   AWS_REGION_IN                # -R region
 
    ALL_INFO=false               # -all
    USER_INFO=false              # -userinfo
@@ -131,6 +133,12 @@ while test $# -gt 0; do
       ;;
     -netinfo)
       export NET_INFO=true
+      shift
+      ;;
+    -R*)
+      shift
+             AWS_REGION_IN=$( echo "$1" | sed -e 's/^[^=]*=//g' )
+      export AWS_REGION_IN
       shift
       ;;
     -s3info)
@@ -388,8 +396,9 @@ if [ "${USER_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -userinfo
 h2 "============= AWS User "
 
 # See https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html
+# and https://docs.aws.amazon.com/cli/latest/topic/config-vars.html
 # note "Edit ~/.aws/credentials"
-note "Setup credentials to AWS_PROFILE=$AWS_PROFILE :"
+note "Setup credentials to AWS_PROFILE=$AWS_PROFILE  AWS_DEFAULT_OUTPUT=$AWS_DEFAULT_OUTPUT "
 
 # See https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html
 note "aws configure list-profiles"
@@ -415,8 +424,22 @@ fi
 
 # AWS_REGION=$( aws configure get region )
 AWS_REGION=$( aws ec2 describe-availability-zones --output text --query 'AvailabilityZones[0].[RegionName]' )
-note "aws region: $AWS_REGION "
+note "aws region: $AWS_REGION, AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION "
    # us-west-2
+
+   if [ -z "$AWS_REGION_IN" ]; then   # variable is blank
+      error "-R parameter Region is blank. Aborting."
+      exit -1
+   else
+      note "Replacing Region \"$AWS_REGION_IN\" with -R \"$AWS_REGION_IN\" ..."
+      # aws configure set profile.???.region "$AWS_REGION_IN"  # in ~/.aws/config
+      aws configure set region "$AWS_REGION_IN"
+      retVal=$?
+      if [ $retVal -ne 0 ]; then
+         fatal "Error $retVal returned"
+         exit -1 
+      fi
+   fi
 
 
 USER_LIST=$( aws iam list-users --query Users[*].UserName )
@@ -439,7 +462,7 @@ fi   # if [ USER_INFO=true
 if [ "${NET_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -netinfo
 h2 "============= Networks "
 
-note "What CIDRs have Ingress Access to which Ports?"
+note "What CIDRs have Ingress Access to which EC2 Ports?"
 aws ec2 describe-security-groups | jq '[ .SecurityGroups[].IpPermissions[] as $a | { "ports": [($a.FromPort|tostring),($a.ToPort|tostring)]|unique, "cidr": $a.IpRanges[].CidrIp } ] | [group_by(.cidr)[] | { (.[0].cidr): [.[].ports|join("-")]|unique }] | add'
 
 note "Public ports:"
@@ -551,15 +574,19 @@ fi #
 if [ "${EC2_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -ec2info
 h2 "============= EC2 "
 
-note "How many EC2 instances of each type running/stopped?"
-aws ec2 describe-instances | jq -r "[[.Reservations[].Instances[]|{ state: .State.Name, type: .InstanceType }]|group_by(.state)|.[]|{state: .[0].state, types: [.[].type]|[group_by(.)|.[]|{type: .[0], count: ([.[]]|length)}] }]"
-   # [ { "state": "running", "types": [ { "type": "t3.medium", "count": 1    } ] } ]
-
 note "Which of my EC2 Security Groups are being used?"
 MY_SEC_GROUPS="$( aws ec2 describe-network-interfaces \
       | jq '[.NetworkInterfaces[].Groups[]|.]|map({ (.GroupId|tostring): true }) | add'; aws ec2 describe-security-groups | jq '[.SecurityGroups[].GroupId]|map({ (.|tostring): false })|add'; )"
 # echo "MY_SEC_GROUPS=$MY_SEC_GROUPS"
 echo "$MY_SEC_GROUPS" | jq -s '[.[1], .[0]]|add|to_entries|[group_by(.value)[]|{ (.[0].value|if . then "in-use" else "unused" end): [.[].key] }]|add' 
+
+
+note "How many EC2 instances of each type running/stopped?"
+aws ec2 describe-instances | jq -r "[[.Reservations[].Instances[]|{ state: .State.Name, type: .InstanceType }]|group_by(.state)|.[]|{state: .[0].state, types: [.[].type]|[group_by(.)|.[]|{type: .[0], count: ([.[]]|length)}] }]"
+   # [ { "state": "running", "types": [ { "type": "t3.medium", "count": 1    } ] } ]
+
+# See https://www.slideshare.net/AmazonWebServices/deep-dive-advanced-usage-of-the-aws-cli
+# for ec2-instances-running and waiting given an image-id.
 
 
 note "EC2 parentage: Which EC2 Instances were created by Stacks?"
@@ -652,7 +679,6 @@ for group in $logs; do echo $(aws logs describe-log-streams --log-group-name $gr
    --order-by LastEventTime --descending --max-items 1 | jq -r '.logStreams[0].logStreamName + " "'); done
 
 
-
 # https://okigiveup.net/tutorials/discovering-aws-with-cli-part-1-basics/
 # https://github.com/afroisalreadyinu/aws-containers
 # note "Create VPC based on CIDR"  # see https://docs.amazonaws.cn/en_us/vpc/latest/userguide/vpc-subnets-commands-example.html
@@ -661,35 +687,4 @@ for group in $logs; do echo $(aws logs describe-log-streams --log-group-name $gr
 
 fi #
 
-
-###########
-
-#note "Step 2: Create a key pair, to file keypair.pem :"
-#aws ec2 create-key-pair --key-name aurora-test-keypair > keypair.pem
-
-
-# note "TODO: Identify subnet id:"
-# https://docs.aws.amazon.com/cli/latest/reference/ec2/describe-subnets.html
-# https://wiki.outscale.net/display/EN/Getting+Information+About+Your+Subnets
-# TODO: <your_subnet_id>
-
-#note "Step 3: Create the instance using the AMI and the key pair, and hold onto the result in a file:"
-# aws ec2 run-instances --instance-type t2.micro --image-id $AMI_IDS --region us-east-1 --subnet-id <your_subnet_id> --key-name keypair --count 1 > instance.json
-
-#note "Step 4: Grab the instance Id from the file:"
-#export INSTANCE_ID=$(jq -r .Instances[].InstanceId instance.json)
-
-#note "Step 5: Wait for the instance to spin-up, then grab it’s IP address and hold onto it in an environment variable:"
-# export INSTANCE_IP=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --output text --query 'Reservations[*].Instances[*].PublicIpAddress')
-
-
-
-# cat vpc.dat | jq  '.[0]'
-#'.Vpcs[] '
-#echo vpc.dat | jq '.Vpcs[]  | select(.DOMAIN == "domain2") | .DOMAINID'
-# jq '.arr | map( first(.[] | objects) // null | .text ) | index("VpcId") ' <vpc.dat
-
-# jq '.Vpcs | to_entries | .[] | select(.value[3].text | contains("VpcId")) | .key' <vpc.dat
-   # jq '.arr | to_entries | .[] | select(.value[3].text | contains("FooBar")) | .key' <test.json
-   # .arr | map( first(.[] | objects) // null | .text ) | index("FooBar")
-   # See https://stackoverflow.com/questions/53986312/have-jq-return-the-index-number-of-an-element-in-an-array/53986579
+# END
