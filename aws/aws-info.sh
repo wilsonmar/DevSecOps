@@ -45,7 +45,7 @@ args_prompt() {
    echo "   -certinfo    to show Certificates info."
    echo "   -loginfo     to show Logging info."
    echo " "
-   echo "   -R \"us-east-1\"  to aws configure set region "
+#  echo "   -R \"us-east-1\"  to aws configure set region "
    echo "USAGE EXAMPLE:"
    echo "./sample.sh -v -allinfo "
  }
@@ -67,7 +67,7 @@ exit_abnormal() {            # Function: Exit with error.
    UPDATE_PKGS=false            # -U
    DOWNLOAD_INSTALL=false       # -I
    AWS_PROFILE="default"        # -p
-   AWS_REGION_IN                # -R region
+  #AWS_REGION_IN=""             # -R region
 
    ALL_INFO=false               # -all
    USER_INFO=false              # -userinfo
@@ -427,19 +427,6 @@ AWS_REGION=$( aws ec2 describe-availability-zones --output text --query 'Availab
 note "aws region: $AWS_REGION, AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION "
    # us-west-2
 
-   if [ -z "$AWS_REGION_IN" ]; then   # variable is blank
-      error "-R parameter Region is blank. Aborting."
-      exit -1
-   else
-      note "Replacing Region \"$AWS_REGION_IN\" with -R \"$AWS_REGION_IN\" ..."
-      # aws configure set profile.???.region "$AWS_REGION_IN"  # in ~/.aws/config
-      aws configure set region "$AWS_REGION_IN"
-      retVal=$?
-      if [ $retVal -ne 0 ]; then
-         fatal "Error $retVal returned"
-         exit -1 
-      fi
-   fi
 
 
 USER_LIST=$( aws iam list-users --query Users[*].UserName )
