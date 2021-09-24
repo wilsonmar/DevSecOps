@@ -16,32 +16,37 @@ SCRIPT_VERSION="v0.1.8"
 
 EPOCH_START="$( date -u +%s )"  # such as 1572634619
 LOG_DATETIME=$( date +%Y-%m-%dT%H:%M:%S%z)-$((1 + RANDOM % 1000))
-echo "=========================== $LOG_DATETIME $THIS_PROGRAM $SCRIPT_VERSION"
+echo "  $THIS_PROGRAM $SCRIPT_VERSION ============== $LOG_DATETIME "
 
 # SETUP STEP 02 - Ensure run variables are based on arguments or defaults ..."
 args_prompt() {
    echo "OPTIONS:"
    echo "   -E           to set -e to NOT stop on error"
    echo "   -x           to set -x to trace command lines"
-#   echo "   -x           to set sudoers -e to stop on error"
    echo "   -v           to run -verbose (list space use and each image to console)"
    echo "   -q           -quiet headings for each step"
    echo " "
-   echo "   -I           -Install brew, docker, docker-compose"
+   echo "   -I           -Install software"
    echo "   -U           -Upgrade packages"
    echo "   -p \"xxx-aws-##\" to use [Default] within ~/.aws/credentials"
    echo " "
-   echo "   -all         to show all sections of info."
+   echo "   -allinfo     to show all sections of info."
+   echo "   -userinfo    to show User info."
    echo "   -netinfo     to show Network info."
+   echo "   -svcinfo     to show Services info with cost history."
+   echo " "
    echo "   -lambdainfo  to show Lambda info."
    echo "   -amiinfo     to show AMI info."
    echo "   -ec2info     to show EC2 info."
+   echo " "
+   echo "   -s3info      to show S3 info."
    echo "   -diskinfo    to show Disk info."
+   echo "   -dbinfo      to show Database info."
    echo "   -certinfo    to show Certificates info."
    echo "   -loginfo     to show Logging info."
    echo " "
    echo "USAGE EXAMPLE:"
-   echo "./sample.sh -u \"Default\" -all "
+   echo "./sample.sh -v -allinfo "
  }
 if [ $# -eq 0 ]; then  # display if no parameters are provided:
    args_prompt
@@ -70,6 +75,7 @@ exit_abnormal() {            # Function: Exit with error.
    EC2_INFO=false               # -ec2info
    S3_INFO=false                # -s3info
    DISK_INFO=false              # -diskinfo
+   DB_INFO=false                # -dbinfo
    CERT_INFO=false              # -diskinfo
    LOG_INFO=false               # -loginfo
 
@@ -79,7 +85,7 @@ exit_abnormal() {            # Function: Exit with error.
 # SETUP STEP 04 - Read parameters specified:
 while test $# -gt 0; do
   case "$1" in
-    -all)
+    -allinfo)
       export ALL_INFO=true
       shift
       ;;
@@ -93,6 +99,10 @@ while test $# -gt 0; do
       ;;
     -diskinfo)
       export DISK_INFO=true
+      shift
+      ;;
+    -dbinfo)
+      export DB_INFO=true
       shift
       ;;
     -ec2info)
@@ -354,9 +364,6 @@ fi
 #  shift 
 #done 
 
-
-IFS=$'\n\t'  #  Internal Field Separator for word splitting is line or tab, not spaces.
-
 # SETUP STEP 10 - Define run error handling:
 EXIT_CODE=0
 if [ "${SET_EXIT}" = true ]; then  # don't
@@ -374,21 +381,15 @@ fi
 
 
 ##############################################################################
+divider
+
 
 if [ "${USER_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -userinfo
-h2 "============= User "
+h2 "============= AWS User "
 
 # See https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html
 # note "Edit ~/.aws/credentials"
 note "Setup credentials to AWS_PROFILE=$AWS_PROFILE :"
-
-note "aws whoami: Calling UserId, Account, Arn?"
-# https://docs.aws.amazon.com/cli/latest/reference/sts/get-caller-identity.html
-aws sts get-caller-identity
-retVal=$?
-if [ $retVal -ne 0 ]; then
-   exit -1 
-fi
 
 # See https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html
 note "aws configure list-profiles"
@@ -397,21 +398,57 @@ aws configure list-profiles
 note "aws config list:"
 aws configure list
 
-note "What AWS account is being used?"
+
+note "aws whoami: UserId, Account, ARN, Account Alias:"
+# See https://medium.com/circuitpeople/aws-cli-with-jq-and-bash-9d54e2eabaf1
+# and https://docs.aws.amazon.com/cli/latest/reference/sts/get-caller-identity.html
 { aws sts get-caller-identity & aws iam list-account-aliases; } | jq -s ".|add"
+   # "UserId": "ABCDEFGHIJKLMNOPQRSTU",
+   # "Account": "123456789012",
+   # "Arn": "arn:aws:iam::987654321234:user/Wilson_Mar",
+   # "AccountAliases": [ "cloud-data-bridge-dev" ]
+retVal=$?
+if [ $retVal -ne 0 ]; then
+   exit -1 
+fi
+
+
+# AWS_REGION=$( aws configure get region )
+AWS_REGION=$( aws ec2 describe-availability-zones --output text --query 'AvailabilityZones[0].[RegionName]' )
+note "aws region: $AWS_REGION "
+   # us-west-2
+
+
+USER_LIST=$( aws iam list-users --query Users[*].UserName )
+note "Count and list of users:"
+echo "$USER_LIST" | wc -l
+echo "$USER_LIST"
+
 
 # note "When was AWS user account created?"
 # See https://docs.aws.amazon.com/cli/latest/reference/iam/get-user.html
 # ERROR: aws iam get-user --user-name "$AWS_PROFILE" --cli-input-json "json" | jq -r ".User.CreateDate[:4]" 
-
-note "Which region is being used?"
-aws ec2 describe-availability-zones --output text --query 'AvailabilityZones[0].[RegionName]'
 
 note "Trusted Advisor"
 CHECK_ID=$(aws --region us-east-1 support describe-trusted-advisor-checks --language en --query 'checks[?name==`Service Limits`].{id:id}[0].id' --output text)
 echo $CHECK_ID
 
 fi   # if [ USER_INFO=true
+
+
+if [ "${NET_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -netinfo
+h2 "============= Networks "
+
+note "What CIDRs have Ingress Access to which Ports?"
+aws ec2 describe-security-groups | jq '[ .SecurityGroups[].IpPermissions[] as $a | { "ports": [($a.FromPort|tostring),($a.ToPort|tostring)]|unique, "cidr": $a.IpRanges[].CidrIp } ] | [group_by(.cidr)[] | { (.[0].cidr): [.[].ports|join("-")]|unique }] | add'
+
+note "Public ports:"
+aws public-ports
+   # "GroupName": "Amazon ECS-Optimized Amazon Linux 2 AMI-2-0-20210331-AutogenByAWSMP-1", "GroupId": "sg-043c2583c8fa2fb7b",
+      #  "PortRanges": [ "tcp:22-22"
+
+
+fi  #
 
 
 if [ "${SVC_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -svcinfo
@@ -480,19 +517,6 @@ local_cost_report
 
 fi # 
 
-if [ "${NET_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -netinfo
-
-h2 "============= Networks "
-
-note "What CIDRs have Ingress Access to which Ports?"
-aws ec2 describe-security-groups | jq '[ .SecurityGroups[].IpPermissions[] as $a | { "ports": [($a.FromPort|tostring),($a.ToPort|tostring)]|unique, "cidr": $a.IpRanges[].CidrIp } ] | [group_by(.cidr)[] | { (.[0].cidr): [.[].ports|join("-")]|unique }] | add'
-
-
-note "RDS (Relational Data Service) Instance Endpoints:"
-aws rds describe-db-instances | jq -r '.DBInstances[] | { (.DBInstanceIdentifier):(.Endpoint.Address + ":" + (.Endpoint.Port|tostring))}'
-
-fi  #
-
 
 if [ "${LAMBDA_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -lambdainfo
 h2 "============= Lambda "
@@ -509,6 +533,19 @@ note "Lambda Function Environment Variables: exposing secrets in variables? Have
 aws lambda list-functions | jq -r '[.Functions[]|{name: .FunctionName, env: .Environment.Variables}]|.[]|select(.env|length > 0)'
 
 fi #
+
+if [ "${AMI_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -amiinfo
+
+h2 "============= \"$MY_AMI_TYPE\" AMIs containing \"$MY_AMI_CONTAINS\" "
+
+note "List AMIs in an environment variable (this is slow, ’cause there are a *lot* of AMIs):"
+#note "Step 1: List AMIs in an environment variable (this is slow, ’cause there are a *lot* of AMIs):"
+export AMI_IDS=$(aws ec2 describe-images --owners amazon | jq -r ".Images[] | { id: .ImageId, desc: .Description } \
+  | select(.desc?) | select(.desc | contains(\"$MY_AMI_TYPE\")) | select(.desc | contains(\"$MY_AMI_CONTAINS\")) | .id")
+echo "AMI_ID=$AMI_IDS "
+
+fi #
+
 
 
 if [ "${EC2_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -ec2info
@@ -551,6 +588,7 @@ aws ec2 describe-snapshots --owner-ids self \
 
 fi #
 
+
 if [ "${S3_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -s3info
 h2 "============= S3 usage "
 
@@ -580,6 +618,17 @@ aws ec2 describe-volumes | jq -r '.Volumes | [ group_by(.State)[] | { (.[0].Stat
 fi #
 
 
+
+if [ "${DB_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -dbinfo
+h2 "============= DB_INFO "
+
+note "RDS (Relational Data Service) Instance Endpoints:"
+aws rds describe-db-instances | jq -r '.DBInstances[] | { (.DBInstanceIdentifier):(.Endpoint.Address + ":" + (.Endpoint.Port|tostring))}'
+
+fi  #
+
+
+
 if [ "${CERT_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -certinfo
 h2 "============= Certificates "
 
@@ -588,6 +637,7 @@ note "aws iam list-server-certificates"
 aws iam list-server-certificates
 
 fi #
+
 
 if [ "${LOG_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -loginfo
 h2 "============= Logs "
@@ -611,17 +661,6 @@ for group in $logs; do echo $(aws logs describe-log-streams --log-group-name $gr
 
 fi #
 
-if [ "${AMI_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -amiinfo
-
-h2 "============= \"$MY_AMI_TYPE\" AMIs containing \"$MY_AMI_CONTAINS\" "
-
-note "List AMIs in an environment variable (this is slow, ’cause there are a *lot* of AMIs):"
-#note "Step 1: List AMIs in an environment variable (this is slow, ’cause there are a *lot* of AMIs):"
-export AMI_IDS=$(aws ec2 describe-images --owners amazon | jq -r ".Images[] | { id: .ImageId, desc: .Description } \
-  | select(.desc?) | select(.desc | contains(\"$MY_AMI_TYPE\")) | select(.desc | contains(\"$MY_AMI_CONTAINS\")) | .id")
-echo "AMI_ID=$AMI_IDS "
-
-fi #
 
 ###########
 
