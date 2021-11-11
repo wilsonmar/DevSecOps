@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-# aws-info.sh in https://github.com/wilsonmar/DevSecOps/blob/main/aws/aws-info.sh
+# USAGE:
+# ./aws-info.sh  # with no parameters displays.
+# From https://github.com/wilsonmar/DevSecOps/blob/main/aws/aws-info.sh
 # Based on https://medium.com/circuitpeople/aws-cli-with-jq-and-bash-9d54e2eabaf1
 #          https://theagileadmin.com/2017/05/26/aws-cli-queries-and-jq/
 #    TODO: https://github.com/bash-my-aws/bash-my-aws documented at https://bash-my-aws.org/
@@ -11,7 +13,7 @@
 
 # SETUP STEP 01 - Capture starting timestamp and display no matter how it ends:
 THIS_PROGRAM="$0"
-SCRIPT_VERSION="v0.1.8"
+SCRIPT_VERSION="v0.1.9"
 # clear  # screen (but not history)
 
 EPOCH_START="$( date -u +%s )"  # such as 1572634619
@@ -24,6 +26,7 @@ args_prompt() {
    echo "   -E           to set -e to NOT stop on error"
    echo "   -x           to set -x to trace command lines"
    echo "   -v           to run -verbose (list space use and each image to console)"
+   echo "   -vv          to run -very verbose for debugging"
    echo "   -q           -quiet headings for each step"
    echo " "
    echo "   -I           -Install software"
@@ -47,7 +50,7 @@ args_prompt() {
    echo " "
 #  echo "   -R \"us-east-1\"  to aws configure set region "
    echo "USAGE EXAMPLE:"
-   echo "./sample.sh -v -allinfo "
+   echo "./aws-info.sh -v -svcinfo "
  }
 if [ $# -eq 0 ]; then  # display if no parameters are provided:
    args_prompt
@@ -64,6 +67,7 @@ exit_abnormal() {            # Function: Exit with error.
    RUN_QUIET=false              # -q
    SET_TRACE=false              # -x
    RUN_VERBOSE=false            # -v
+   RUN_DEBUG=false              # -vv
    UPDATE_PKGS=false            # -U
    DOWNLOAD_INSTALL=false       # -I
    AWS_PROFILE="default"        # -p
@@ -161,6 +165,10 @@ while test $# -gt 0; do
       export RUN_VERBOSE=true
       shift
       ;;
+    -vv)
+      export RUN_DEBUG=true
+      shift
+      ;;
     -p*)
       shift
              AWS_PROFILE=$( echo "$1" | sed -e 's/^[^=]*=//g' )
@@ -203,6 +211,11 @@ info() {   # output on every run
    printf "${dim}\n➜ %s${reset}\n" "$(echo "$@" | sed '/./,$!d')"
 }
 note() { if [ "${RUN_VERBOSE}" = true ]; then
+   printf "\n${bold}${cyan} ${reset} ${cyan}%s${reset}" "$(echo "$@" | sed '/./,$!d')"
+   printf "\n"
+   fi
+}
+debug_echo() { if [ "${RUN_DEBUG}" = true ]; then
    printf "\n${bold}${cyan} ${reset} ${cyan}%s${reset}" "$(echo "$@" | sed '/./,$!d')"
    printf "\n"
    fi
@@ -288,7 +301,7 @@ BASH_VERSION=$( bash --version | grep bash | cut -d' ' -f4 | head -c 1 )
       FREE_DISKBLOCKS_START=$(read -d '' -ra df_arr < <(LC_ALL=C df -P /); echo "${df_arr[10]}" )
    else
       if [ "${UPDATE_PKGS}" = true ]; then
-         h2 "Bash version ${BASH_VERSION} too old. Upgrading to latest ..."
+         info "Bash version ${BASH_VERSION} too old. Upgrading to latest ..."
          if [ "${PACKAGE_MANAGER}" == "brew" ]; then
             brew install bash
          elif [ "${PACKAGE_MANAGER}" == "apt-get" ]; then
@@ -353,19 +366,17 @@ HOSTNAME=$( hostname )
 PUBLIC_IP=$( curl -s ifconfig.me )
 
 if [ "$OS_TYPE" == "macOS" ]; then  # it's on a Mac:
-   note "BASHFILE=~/.bash_profile ..."
+   debug_echo "BASHFILE=~/.bash_profile ..."
    BASHFILE="$HOME/.bash_profile"  # on Macs
 else
-   note "BASHFILE=~/.bashrc ..."
+   debug_echo "BASHFILE=~/.bashrc ..."
    BASHFILE="$HOME/.bashrc"  # on Linux
 fi
+   debug_echo "Running $0 in $PWD"  # $0 = script being run in Present Wording Directory.
+   debug_echo "OS_TYPE=$OS_TYPE using $PACKAGE_MANAGER from $DISK_PCT_FREE disk free"
+   debug_echo "on hostname=$HOSTNAME at PUBLIC_IP=$PUBLIC_IP."
+   debug_echo " "
 
-      note "Running $0 in $PWD"  # $0 = script being run in Present Wording Directory.
-      note "Start time $LOG_DATETIME"
-      note "Bash $BASH_VERSION from $BASHFILE"
-      note "OS_TYPE=$OS_TYPE using $PACKAGE_MANAGER from $DISK_PCT_FREE disk free"
-      note "on hostname=$HOSTNAME at PUBLIC_IP=$PUBLIC_IP."
-      note " "
 # print all command arguments submitted:
 #while (( "$#" )); do 
 #  echo $1 
@@ -375,22 +386,23 @@ fi
 # SETUP STEP 10 - Define run error handling:
 EXIT_CODE=0
 if [ "${SET_EXIT}" = true ]; then  # don't
-   note "Set -e (no -E parameter  )..."
+   debug_echo "Set -e (no -E parameter  )..."
    set -e  # exits script when a command fails
    # set -eu pipefail  # pipefail counts as a parameter
 else
    warning "Don't set -e (-E parameter)..."
 fi
 if [ "${SET_XTRACE}" = true ]; then
-   note "Set -x ..."
+   debug_echo "Set -x ..."
    set -x  # (-o xtrace) to show commands for specific issues.
 fi
 # set -o nounset
 
 
+# TODO: brew install awscli
+
 ##############################################################################
 divider
-
 
 if [ "${USER_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -userinfo
 h2 "============= AWS User "
