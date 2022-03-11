@@ -1,0 +1,32 @@
+version: '3'
+services:
+  wordpress:
+    image: wordpress
+    ports:
+      - "80:80"
+    logging:
+      driver: awslogs
+      options: 
+        awslogs-group: wpfargate
+        awslogs-region: us-east-1
+        awslogs-stream-prefix: wordpress
+
+
+nano ecs-params.yml
+
+version: 1
+task_definition:
+  task_execution_role: ecsTaskExecutionRole
+  ecs_network_mode: awsvpc
+  task_size:
+    mem_limit: 0.5GB
+    cpu_limit: 256
+run_params:
+  network_configuration:
+    awsvpc_configuration:
+      subnets:
+        - "subnet-0ea714f5de083febd"
+        - "subnet-03157b03dac355069"
+      security_groups:
+        - "sg-056e52a070c1aad48"
+      assign_public_ip: ENABLED
