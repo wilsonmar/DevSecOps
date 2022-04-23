@@ -6,7 +6,7 @@
 # This Bash script is explained in https://wilsonmar.github.io/bash-scripts
 
 # After you obtain a Terminal (console) in your environment,
-# cd to folder, copy this line and paste in the terminal:
+# cd to folder, copy this line (without the # comment character) and paste in the terminal:
 # bash -c "$(curl -fsSL https://raw.githubusercontent.com/wilsonmar/DevSecOps/master/bash/sample.sh)" -v -i
 
 # This downloads and installs all the utilities, then invokes programs to prove they work
@@ -750,7 +750,6 @@ if [ "${DOWNLOAD_INSTALL}" = true ]; then  # -I
          # Tools_Executables | grep version
          # version: 9.2.0.0.1.1510905681
       # TODO: https://gist.github.com/tylergets/90f7e61314821864951e58d57dfc9acd
-exit
 
       if ! command -v brew ; then   # brew not recognized:
          if [ "$OS_TYPE" == "macOS" ]; then  # it's on a Mac:
@@ -867,9 +866,10 @@ if [ "${DOWNLOAD_INSTALL}" = true ]; then  # -I
    fi  # PACKAGE_MANAGER
 fi  # DOWNLOAD_INSTALL
 
-if [ "${CONTINUE_ON_ERR}" = false ]; then  # -E
-   shellcheck "$0"
-fi
+# TODO: (Removed because it executes even if shellcheck is not installed:
+#if [ "${CONTINUE_ON_ERR}" = false ]; then  # -E
+#   shellcheck "$0"
+#fi
 
 
 ### 12. Install basic utilities (git, jq)
