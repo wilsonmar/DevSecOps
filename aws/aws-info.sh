@@ -399,7 +399,7 @@ fi
 # set -o nounset
 
 
-# TODO: brew install awscli
+# brew install awscli
 
 ##############################################################################
 divider
@@ -465,10 +465,10 @@ note "What CIDRs have Ingress Access to which EC2 Ports?"
 aws ec2 describe-security-groups | jq '[ .SecurityGroups[].IpPermissions[] as $a | { "ports": [($a.FromPort|tostring),($a.ToPort|tostring)]|unique, "cidr": $a.IpRanges[].CidrIp } ] | [group_by(.cidr)[] | { (.[0].cidr): [.[].ports|join("-")]|unique }] | add'
 
 note "Public ports:"
-aws public-ports
+# aws public-ports
+   # See https://docs.aws.amazon.com/workspaces/latest/adminguide/workspaces-port-requirements.html
    # "GroupName": "Amazon ECS-Optimized Amazon Linux 2 AMI-2-0-20210331-AutogenByAWSMP-1", "GroupId": "sg-043c2583c8fa2fb7b",
       #  "PortRanges": [ "tcp:22-22"
-
 
 fi  #
 
