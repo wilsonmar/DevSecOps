@@ -12,7 +12,7 @@
 export GOOGLE_PROJECT=$DEVSHELL_PROJECT_ID
 export CAI_BUCKET_NAME=cai-$GOOGLE_PROJECT
 
-## Task 1.1. Install the CFT Scorecard CLI utility
+echo "## Task 1.1. Install the CFT Scorecard CLI utility:"
 
 # Enable Cloud Asset API in your project:
 gcloud services enable cloudasset.googleapis.com \
@@ -29,7 +29,7 @@ gcloud projects add-iam-policy-binding ${GOOGLE_PROJECT}  \
     --format="value(PROJECT_NUMBER)")@gcp-sa-cloudasset.iam.gserviceaccount.com \
     --role=roles/storage.admin
 
-# Task 1.2. Clone the Forseti Policy Library. 
+echo "## # Task 1.2. Clone the Forseti Policy Library:"
 
 # It enforces policies in the policy-library/policies/constraints folder
 git clone https://github.com/forseti-security/policy-library.git
@@ -42,7 +42,7 @@ cp policy-library/samples/storage_denylist_public.yaml \
 gsutil mb -l us-central1 -p $GOOGLE_PROJECT gs://$CAI_BUCKET_NAME
 
 
-## Task 2.1. Collect data for the CFT Scorecard using Cloud Asset Inventory (CAI):
+echo "## Task 2.1. Collect data for the CFT Scorecard using Cloud Asset Inventory (CAI):"
 # input to CFT Scorecard is resource and IAM data, and the policy-library folder.
 # use CAI to generate the resource and IAM policy information for the project.
 
@@ -68,14 +68,14 @@ gcloud asset export \
     --project=$GOOGLE_PROJECT
 
 
-## Task 3. Analyze CAI data with CFT scorecard
+echo "## Task 3. Analyze CAI data with CFT scorecard:"
 
 # Download the CFT scorecard application and make it executable:
 curl -o cft https://storage.googleapis.com/cft-cli/latest/cft-linux-amd64
 chmod +x cft
 
 
-## Task 4. Add IAM constraints to CFT scorecard
+echo "## Task 4. Add IAM constraints to CFT scorecard:"
 # to ensure you are entirely aware who has the roles/owner role aside from your allowlisted user:
 # Add a new policy to blacklist the IAM Owner Role
 cat > policy-library/policies/constraints/iam_allowlist_owner.yaml << EOF
@@ -99,7 +99,7 @@ spec:
 EOF
 
 
-# Set two extra variables to help with the new constraint creation:
+echo "# Set variables to help with the new constraint creation:"
 # look at roles/editor, too.
 export USER_ACCOUNT="$(gcloud config get-value core/account)"
 export PROJECT_NUMBER=$(gcloud projects describe $GOOGLE_PROJECT --format="get(projectNumber)")
@@ -128,8 +128,9 @@ spec:
     - "serviceAccount:$GOOGLE_PROJECT**gserviceaccount.com"
 EOF
 
-# Rerun CFT scorecard to find issues with the new policies:
+echo "# Rerun CFT scorecard to find issues with the new policies:"
 ./cft scorecard --policy-path=policy-library/ --bucket=$CAI_BUCKET_NAME
+
 # You should now see an editor who is not in your organization. 
 
 # END
