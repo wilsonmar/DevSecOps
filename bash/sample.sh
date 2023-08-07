@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
+# This is mac-install.sh from template https://github.com/wilsonmar/mac-setup/blob/main/mac-setup.sh
 # shellcheck disable=SC2001 # See if you can use ${variable//search/replace} instead.
 # shellcheck disable=SC1090 # Can't follow non-constant source. Use a directive to specify location.
 # shellcheck disable=SC2129  # Consider using { cmd1; cmd2; } >> file instead of individual redirects.
 
-# This Bash script is explained in https://wilsonmar.github.io/bash-scripts
+# Coding of this Bash script is explained in https://wilsonmar.github.io/bash-scripts
 
 # After you obtain a Terminal (console) in your environment,
-# cd to folder, copy this line (without the # comment character) and paste in the terminal:
-# bash -c "$(curl -fsSL https://raw.githubusercontent.com/wilsonmar/DevSecOps/master/bash/sample.sh)" -v -i
+# cd to folder, copy this line (without the # comment character) and paste in the terminal so
+# it installs utilities:
+# bash -c "$(curl -fsSL https://raw.githubusercontent.com/wilsonmar/DevSecOps/master/bash/mac-setup.sh)" -v -I
 
 # This downloads and installs all the utilities, then invokes programs to prove they work
 # This was run on macOS Mojave and Ubuntu 16.04.
 
 ### 1. Capture a time stamp to later calculate how long the script runs, no matter how it ends:
 THIS_PROGRAM="$0"
-SCRIPT_VERSION="v0.72"
+SCRIPT_VERSION="v0.73"
 EPOCH_START="$( date -u +%s )"  # such as 1572634619
 LOG_DATETIME=$( date +%Y-%m-%dT%H:%M:%S%z)-$((1 + RANDOM % 1000))
 # clear  # screen (but not history)
@@ -83,23 +85,23 @@ args_prompt() {
    echo "   -D           -Delete containers and other files after run (to save disk space)"
    echo "   -M           remove Docker iMages pulled from DockerHub (to save disk space)"
    echo "USAGE EXAMPLES # WebGoat Docker with Contrast agent"
-   echo "./sample.sh -v -s -eggplant -k -a -console -dc -K -D  # eggplant use docker-compose of selenium-hub images"
-   echo "./sample.sh -v -S \"\$HOME/.mck-secrets.sh\" -eks -D "
-   echo "./sample.sh -v -S \"\$HOME/.mck-secrets.sh\" -H -m -t    # Use SSH-CA certs with -H Hashicorp Vault -test actual server"
-   echo "./sample.sh -v -g \"abcdef...89\" -p \"cp100-1094\"  # Google API call"
-   echo "./sample.sh -v -n -a  # NodeJs app with MongoDB"
-   echo "./sample.sh -v -i -o  # Ruby app"   
-   echo "./sample.sh -v -I -U -c -s -y -r -a -aws   # Python Flask web app in Docker"
-   echo "./sample.sh -v -I -U    -s -H    -t        # Initiate Vault test server"
-   echo "./sample.sh -v          -s -H              #      Run Vault test program"
-   echo "./sample.sh -q          -s -H    -a        # Initiate Vault prod server"
-   echo "./sample.sh -v -I -U -c    -H -G -N \"python-samples\" -f \"a9y-sample.py\" -P \"-v\" -t -AWS -C  # Python sample app using Vault"
-   echo "./sample.sh -v -V -c -T -F \"section_2\" -f \"2-1.ipynb\" -K  # Jupyter anaconda Tensorflow in Venv"
-   echo "./sample.sh -v -V -c -L -s    # Use CircLeci based on secrets"
-   echo "./sample.sh -v -D -M -C"
-   echo "./sample.sh -G -v -f \"challenge.py\" -P \"-v\"  # to run a program in python-samples"
-   echo "./sample.sh -v -S \"$HOME/.mck-secrets.sh\" -H -m -o  # -t for local vault for Vault SSH keygen"
-   echo "./sample.sh -v -S \"$HOME/.mck-secrets.sh\" -aws  # for Terraform"
+   echo "./mac-setup.sh -v -s -eggplant -k -a -console -dc -K -D  # eggplant use docker-compose of selenium-hub images"
+   echo "./mac-setup.sh -v -S \"\$HOME/.mck-secrets.sh\" -eks -D "
+   echo "./mac-setup.sh -v -S \"\$HOME/.mck-secrets.sh\" -H -m -t    # Use SSH-CA certs with -H Hashicorp Vault -test actual server"
+   echo "./mac-setup.sh -v -g \"abcdef...89\" -p \"cp100-1094\"  # Google API call"
+   echo "./mac-setup.sh -v -n -a  # NodeJs app with MongoDB"
+   echo "./mac-setup.sh -v -i -o  # Ruby app"   
+   echo "./mac-setup.sh -v -I -U -c -s -y -r -a -aws   # Python Flask web app in Docker"
+   echo "./mac-setup.sh -v -I -U    -s -H    -t        # Initiate Vault test server"
+   echo "./mac-setup.sh -v          -s -H              #      Run Vault test program"
+   echo "./mac-setup.sh -q          -s -H    -a        # Initiate Vault prod server"
+   echo "./mac-setup.sh -v -I -U -c    -H -G -N \"python-samples\" -f \"a9y-sample.py\" -P \"-v\" -t -AWS -C  # Python sample app using Vault"
+   echo "./mac-setup.sh -v -V -c -T -F \"section_2\" -f \"2-1.ipynb\" -K  # Jupyter anaconda Tensorflow in Venv"
+   echo "./mac-setup.sh -v -V -c -L -s    # Use CircLeci based on secrets"
+   echo "./mac-setup.sh -v -D -M -C"
+   echo "./mac-setup.sh -G -v -f \"challenge.py\" -P \"-v\"  # to run a program in python-samples"
+   echo "./mac-setup.sh -v -S \"$HOME/.mck-secrets.sh\" -H -m -o  # -t for local vault for Vault SSH keygen"
+   echo "./mac-setup.sh -v -S \"$HOME/.mck-secrets.sh\" -aws  # for Terraform"
 }
 if [ $# -eq 0 ]; then  # display if no parameters are provided:
    args_prompt
@@ -756,6 +758,8 @@ if [ "${DOWNLOAD_INSTALL}" = true ]; then  # -I
             h2 "Installing brew package manager on macOS using Ruby ..."
             mkdir homebrew && curl -L https://GitHub.com/Homebrew/brew/tarball/master \
                | tar xz --strip 1 -C homebrew
+            # if PATH for brew available:
+
          elif [ "$OS_TYPE" == "WSL" ]; then
             h2 "Installing brew package manager on WSL ..." # A fork of Homebrew known as Linuxbrew.
             sh -c "$(curl -fsSL https://raw.githubusercontent.com/Linuxbrew/install/master/install.sh)"
@@ -938,10 +942,10 @@ else
 #      code "${SECRETS_FILEPATH}"
       exit 9
 
-      warning "Downloading file .secrets.sample.sh ... "
-      #curl -s -O https://raw.GitHubusercontent.com/wilsonmar/DevSecOps/master/secrets.sample.sh
-      #warning "Copying secrets.sample.sh downloaded to \$HOME/.secrets.sh ... "
-      #cp secrets.sample.sh  .secrets.sh
+      warning "Downloading file .secrets.mac-setup.sh ... "
+      #curl -s -O https://raw.GitHubusercontent.com/wilsonmar/DevSecOps/master/secrets.mac-setup.sh
+      #warning "Copying secrets.mac-setup.sh downloaded to \$HOME/.secrets.sh ... "
+      #cp secrets.mac-setup.sh  .secrets.sh
       #fatal "Please edit file \$HOME/.secrets.sh and run again ..."
       #exit 1
    else  # secrets file found:
@@ -1025,7 +1029,7 @@ if [ "${CLONE_GITHUB}" = true ]; then   # -clone specified:
       fi
 
       Clone_GitHub_repo      # defined above in this file.
-      # curl -s -O https://raw.GitHubusercontent.com/wilsonmar/build-a-saas-app-with-flask/master/sample.sh
+      # curl -s -O https://raw.GitHubusercontent.com/wilsonmar/build-a-saas-app-with-flask/master/mac-setup.sh
       # git remote add upstream https://github.com/nickjj/build-a-saas-app-with-flask
       # git pull upstream master
 
