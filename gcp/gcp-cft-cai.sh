@@ -1,9 +1,10 @@
 #!/bin/bash -e
 #!/usr/bin/env bash
 # gcp-cft-cai.sh from https://github.com/wilsonmar/DevSecOps/blob/main/gcp-cft-cai.sh
-# Based on Qwiklabs GSP698 
-# in https://www.coursera.org/projects/googlecloud-securing-google-cloud-with-cft-scorecard-dwrbx
-# Explained at https://wilsonmar.github.io/gcp/#gcp-cft-cai
+# with video at https://www.youtube.com/watch?v=ixxehIF86RY
+# based on Qwiklabs GSP698 https://googlecoursera.qwiklabs.com/focuses/29820714?parent=lti_session
+# referenced from https://www.coursera.org/projects/googlecloud-securing-google-cloud-with-cft-scorecard-dwrbx
+# CFT explained at https://wilsonmar.github.io/gcp/#gcp-cft-cai
 
 # To run this script, copy and paste this command in Google Cloud Shell online:
 # sh -c "$(curl -fsSL https://raw.githubusercontent.com/wilsonmar/DevSecOps/master/gcp/gcp-cft-cai.sh)" -v -I
