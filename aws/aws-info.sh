@@ -13,7 +13,7 @@
 
 # SETUP STEP 01 - Capture starting timestamp and display no matter how it ends:
 THIS_PROGRAM="$0"
-SCRIPT_VERSION="v0.1.9"
+SCRIPT_VERSION="v0.1.10" # Add get login url aws-info.sh" 
 # clear  # screen (but not history)
 
 EPOCH_START="$( date -u +%s )"  # such as 1572634619
@@ -32,6 +32,8 @@ args_prompt() {
    echo "   -I           -Install software"
    echo "   -U           -Upgrade packages"
    echo "   -p \"xxx-aws-##\" to use [Default] within ~/.aws/credentials"
+   echo " "
+   echo "   -console     for AWS Console URL for the current AWS account"
    echo " "
    echo "   -allinfo     to show all sections of info."
    echo "   -userinfo    to show User info."
@@ -73,6 +75,8 @@ exit_abnormal() {            # Function: Exit with error.
    AWS_PROFILE="default"        # -p
   #AWS_REGION_IN=""             # -R region
 
+   AWS_CONSOLE_URL=false        # -console
+
    ALL_INFO=false               # -all
    USER_INFO=false              # -userinfo
    NET_INFO=false               # -netinfo
@@ -101,6 +105,10 @@ while test $# -gt 0; do
       ;;
     -certinfo)
       export CERT_INFO=true
+      shift
+      ;;
+    -console)
+      export AWS_CONSOLE_URL=true
       shift
       ;;
     -diskinfo)
@@ -240,7 +248,8 @@ pause_for_confirmation() {
   read -rsp $'Press any key to continue (ctrl-c to quit):\n' -n1 key
 }
 
-# SETUP STEP 06 - Check what operating system is in use:
+
+### SETUP STEP 06 - Check what operating system is in use:
    OS_TYPE="$( uname )"
    OS_DETAILS=""  # default blank.
 if [ "$(uname)" == "Darwin" ]; then  # it's on a Mac:
@@ -284,7 +293,7 @@ else
 fi
 # note "OS_DETAILS=$OS_DETAILS"
 
-# SETUP STEP 07 - Define utility functions, such as bash function to kill process by name:
+### SETUP STEP 07 - Define utility functions, such as bash function to kill process by name:
 ps_kill(){  # $1=process name
       PSID=$(ps aux | grep $1 | awk '{print $2}')
       if [ -z "$PSID" ]; then
@@ -294,7 +303,7 @@ ps_kill(){  # $1=process name
       fi
 }
 
-# SETUP STEP 08 - Adjust Bash version:
+### SETUP STEP 08 - Adjust Bash version:
 BASH_VERSION=$( bash --version | grep bash | cut -d' ' -f4 | head -c 1 )
    if [ "${BASH_VERSION}" -ge "4" ]; then  # use array feature in BASH v4+ :
       DISK_PCT_FREE=$(read -d '' -ra df_arr < <(LC_ALL=C df -P /); echo "${df_arr[11]}" )
@@ -320,7 +329,7 @@ BASH_VERSION=$( bash --version | grep bash | cut -d' ' -f4 | head -c 1 )
       fi
    fi
 
-# SETUP STEP 09 - Handle run endings:"
+### SETUP STEP 09 - Handle run endings:"
 
 # In case of interrupt control+C confirm to exit gracefully:
 #interrupt_count=0
@@ -361,7 +370,7 @@ sig_cleanup() {
 
 #################### Print run heading:
 
-# SETUP STEP 09 - Operating environment information:
+### SETUP STEP 09 - Operating environment information:
 HOSTNAME=$( hostname )
 PUBLIC_IP=$( curl -s ifconfig.me )
 
@@ -402,7 +411,32 @@ fi
 # brew install awscli
 
 ##############################################################################
-divider
+# divider
+
+if [ -f "$HOME/.aws/config" ]; then
+   h2 "AWS config file:"
+   note $( cat "$HOME/.aws/config" )
+else
+   error "AWS config file not found in $HOME/.aws/config. Aborting."
+   exit 0
+fi
+
+   if ! command -v aws ; then
+      brew install awscli
+   fi
+   aws --version
+
+if [ "${AWS_CONSOLE_URL}" = true ]; then  # don't
+   # Based on https://leaherb.com/get-aws-console-login-link-using-cli/
+   h2 "AWS Console Login URL "
+   AWS_ACCOUNT_ID=$(aws iam get-user --query 'User.Arn' )
+   # AWS_ACCOUNT_ID=$(aws iam get-user --query 'User.Arn' | awk -F\: '{print $5}')
+   echo "DEBUG: $AWS_ACCOUNT_ID"
+   AWS_CONSOLE_URL="https://${AWS_ACCOUNT_ID}.signin.aws.amazon.com/console/"
+      # https://0123456789.signin.aws.amazon.com/console/
+   echo "AWS Login URL=${AWS_CONSOLE_URL}" 
+fi
+
 
 if [ "${USER_INFO}" = true ] || [ "${ALL_INFO}" = true ]; then   # -userinfo
 h2 "============= AWS User "
